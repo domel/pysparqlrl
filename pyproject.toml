@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sparql-rl"
+version = "0.1.0"
+description = "Standalone SPARQL 1.2 RL processor"
+requires-python = ">=3.11"
+dependencies = ["rdflib>=7.1"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+
+[project.scripts]
+sparql-rl = "sparql_rl.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sparql_rl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["w3c: official W3C conformance tests"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
