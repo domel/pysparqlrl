@@ -46,3 +46,22 @@ def test_closed_cycle():
 def test_data_matching_has_no_runtime_dependencies():
     rules = parse_rules(P + "RULE {?x :p ?v} WHERE DATA {?x :p ?o SET(?v := 1)}")
     assert not build_dependency_graph(rules).edges
+
+
+def test_head_blank_node_cannot_generate_an_iri():
+    from sparql_rl.rdf.parser import BNode
+
+    assert not compatible(
+        (IRI("urn:fixed"), IRI("urn:p"), Variable("v")),
+        (BNode("fresh"), IRI("urn:p"), IRI("urn:o")),
+    )
+
+
+def test_unification_rejects_recursive_triple_term_substitution():
+    from sparql_rl.rdf.parser import TripleTerm
+
+    x, y = Variable("x"), Variable("y")
+    assert not compatible(
+        (x, IRI("urn:p"), x),
+        (y, IRI("urn:p"), TripleTerm(y, IRI("urn:q"), IRI("urn:o"))),
+    )

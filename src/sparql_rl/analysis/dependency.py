@@ -32,14 +32,35 @@ def compatible(pattern: Triple, template: Triple) -> bool:
             item = bindings[item]
         return item
 
+    def occurs(variable: tuple[int, Node], item: tuple[int, Node]) -> bool:
+        item = resolve(item)
+        if variable == item:
+            return True
+        node = item[1]
+        return isinstance(node, TripleTerm) and any(
+            occurs(variable, (item[0], child))
+            for child in (node.subject, node.predicate, node.object)
+        )
+
     def unify(left: tuple[int, Node], right: tuple[int, Node]) -> bool:
         left, right = resolve(left), resolve(right)
         if left == right:
             return True
+        for blank, other in ((left, right), (right, left)):
+            if (
+                blank[0] == 1
+                and isinstance(blank[1], BNode)
+                and not isinstance(other[1], (Variable, BNode))
+            ):
+                return False
         if isinstance(left[1], (Variable, BNode)):
+            if occurs(left, right):
+                return False
             bindings[left] = right
             return True
         if isinstance(right[1], (Variable, BNode)):
+            if occurs(right, left):
+                return False
             bindings[right] = left
             return True
         a, b = left[1], right[1]
