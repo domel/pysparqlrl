@@ -1,0 +1,130 @@
+import json
+import subprocess
+import sys
+
+import pytest
+
+from sparql_rl import infer, parse_rules, prepare_rules, query
+from sparql_rl.cli import main
+from sparql_rl.rdf.io import parse_data
+from sparql_rl.rdf.parser import IRI
+
+RULES = "RULE {?s <urn:q> ?o} WHERE {?s <urn:p> ?o}"
+DATA = "<urn:a> <urn:p> <urn:b> ."
+
+
+@pytest.mark.parametrize("rules_file", [False, True])
+@pytest.mark.parametrize("data_file", [False, True])
+def test_input_matrix(tmp_path, capsys, rules_file, data_file):
+    r, d = tmp_path / "rules.srl", tmp_path / "data.ttl"
+    r.write_text(RULES)
+    d.write_text(DATA)
+    args = [
+        "infer",
+        *(["-r", str(r)] if rules_file else ["-R", RULES]),
+        *(["-d", str(d)] if data_file else ["-D", DATA]),
+    ]
+    assert main(args) == 0
+    result = parse_data(capsys.readouterr().out)
+    assert set(result) == {(IRI("urn:a"), IRI("urn:q"), IRI("urn:b"))}
+
+
+def test_library_api_does_not_mutate_base():
+    base = parse_data(DATA)
+    rules = prepare_rules(parse_rules(RULES))
+    assert len(infer(rules, base)) == 1
+    assert len(base) == 1
+    assert len(infer(rules, base, include_base=True)) == 2
+    result = query(rules, base, "{?s <urn:q> ?o}")
+    assert result.boolean
+    assert len(result.bindings) == 1
+
+
+@pytest.mark.parametrize(
+    "command,extra",
+    [
+        ("parse", ["--json"]),
+        ("check", []),
+        ("check", ["--level", "syntax"]),
+        ("check", ["--level", "wellformed"]),
+        ("explain", ["--format", "json"]),
+        ("explain", ["--format", "dot"]),
+        ("explain", []),
+    ],
+)
+def test_diagnostics(capsys, command, extra):
+    assert main([command, "-R", RULES, *extra]) == 0
+    assert capsys.readouterr().out
+
+
+@pytest.mark.parametrize("format", ["json", "table", "boolean"])
+def test_query(capsys, format):
+    assert (
+        main(
+            [
+                "query",
+                "-R",
+                RULES,
+                "-D",
+                DATA,
+                "--goal",
+                "{?s <urn:q> ?o}",
+                "--format",
+                format,
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    if format == "json":
+        assert len(json.loads(output)["results"]["bindings"]) == 1
+    else:
+        assert output
+    assert main(["query", "-R", RULES, "--goal", "{?s <urn:q> ?o}"]) == 1
+
+
+def test_scope_isolation(capsys):
+    assert (
+        main(
+            ["parse", "-R", "PREFIX : <urn:example:> DATA {}", "-R", "DATA {:a :p :b}"]
+        )
+        == 3
+    )
+    assert "undeclared prefix" in capsys.readouterr().err
+
+
+def test_stdin_and_output(tmp_path, monkeypatch):
+    from io import StringIO
+
+    monkeypatch.setattr(sys, "stdin", StringIO(DATA))
+    output = tmp_path / "result.nt"
+    assert main(["infer", "-R", RULES, "-d", "-", "-o", str(output)]) == 0
+    assert len(parse_data(output.read_text())) == 1
+    with pytest.raises(SystemExit) as error:
+        main(["infer", "-r", "-", "-d", "-"])
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "rules,code",
+    [
+        ("INVALID", 3),
+        ("RULE {?x <urn:p> ?y} WHERE {}", 4),
+        ("RULE {?x <urn:p> ?y} WHERE {?x <urn:p> ?y SET(?z := 1)}", 5),
+        ("IMPORTS <https://example.org/rules.srl>", 6),
+    ],
+)
+def test_errors(capsys, rules, code):
+    assert main(["check", "-R", rules]) == code
+    assert capsys.readouterr().err
+
+
+def test_module_and_executable():
+    for command in (
+        [sys.executable, "-m", "sparql_rl"],
+        [str(__import__("pathlib").Path(sys.executable).parent / "sparql-rl")],
+    ):
+        process = subprocess.run(
+            [*command, "--version"], capture_output=True, text=True, check=True
+        )
+        assert "2026-09-02" in process.stdout
