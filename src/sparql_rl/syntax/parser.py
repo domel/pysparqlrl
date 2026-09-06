@@ -301,7 +301,36 @@ class RuleParser(TurtleParser):
                     self.scanner.error(f"unsupported built-in {name}")
                 for _ in match.group():
                     self.scanner.advance()
-                left = Expression(name, self.arguments())
+                arguments = self.arguments()
+                count = len(arguments)
+                allowed = {
+                    "NOW": {0},
+                    "UUID": {0},
+                    "STRUUID": {0},
+                    "BNODE": {0, 1},
+                    "SUBSTR": {2, 3},
+                    "REPLACE": {3, 4},
+                    "REGEX": {2, 3},
+                    "IF": {3},
+                    "STRLANGDIR": {3},
+                    "TRIPLE": {3},
+                }
+                binary = {
+                    "LANGMATCHES",
+                    "CONTAINS",
+                    "STRSTARTS",
+                    "STRENDS",
+                    "STRBEFORE",
+                    "STRAFTER",
+                    "STRLANG",
+                    "STRDT",
+                    "SAMETERM",
+                }
+                if name != "CONCAT" and count not in allowed.get(
+                    name, {2} if name in binary else {1}
+                ):
+                    self.scanner.error(f"invalid argument count for {name}")
+                left = Expression(name, arguments)
             else:
                 left = self.parse_object()
                 self.ws()

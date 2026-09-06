@@ -140,6 +140,15 @@ def _evaluate(
 ) -> Node:
     if isinstance(expr, Variable):
         return solution[expr]
+    if isinstance(expr, TripleTerm):
+        predicate = evaluate(expr.predicate, solution, context)
+        if not isinstance(predicate, IRI):
+            raise ExpressionError("triple predicate must be an IRI")
+        return TripleTerm(
+            evaluate(expr.subject, solution, context),
+            predicate,
+            evaluate(expr.object, solution, context),
+        )
     if not isinstance(expr, Expression):
         return expr
     op, args = expr.operator, expr.arguments
@@ -208,7 +217,12 @@ def _evaluate(
     if op == "unary!":
         return literal(not ebv(a))
     if op in {"unary+", "unary-"}:
-        return literal(number(a) * (-1 if op == "unary-" else 1))
+        numeric = number(a) * (-1 if op == "unary-" else 1)
+        return literal(
+            int(numeric)
+            if isinstance(a, Literal) and a.datatype == XSD_NS + "integer"
+            else numeric
+        )
     if op in {"+", "-", "*", "/"}:
         x, y = number(a), number(values[1])
         if isinstance(x, float) or isinstance(y, float):
@@ -260,7 +274,7 @@ def _evaluate(
             isinstance(a, Literal) and bool(a.lang if op == "HASLANG" else a.direction)
         )
     if op == "TRIPLE":
-        if not isinstance(a, (IRI, BNode)) or not isinstance(values[1], IRI):
+        if not isinstance(values[1], IRI):
             raise ExpressionError("invalid triple term")
         return TripleTerm(a, values[1], values[2])
     if op in {"SUBJECT", "PREDICATE", "OBJECT"}:

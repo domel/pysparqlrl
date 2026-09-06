@@ -65,6 +65,12 @@ class Literal:
     direction: str | None = None
     datatype: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.lang is not None:
+            object.__setattr__(self, "lang", self.lang.lower())
+        if self.datatype == XSD_NS + "string":
+            object.__setattr__(self, "datatype", None)
+
 
 @dataclass(frozen=True)
 class TripleTerm:
@@ -656,7 +662,7 @@ class BaseParser:
         self.scanner = Scanner(text, source)
         self.triples: list[Triple] = []
         self._generated_bnode = 0
-        self._reserved_labels: set[str] = set()
+        self._reserved_labels: set[str] = set(re.findall(r"_:([\w.-]+)", text))
 
     def new_bnode(self) -> BNode:
         """Create a fresh generated blank node label that avoids collisions."""

@@ -76,7 +76,7 @@ def evaluate_rule(
                     substitute(term.predicate),
                     substitute(term.object),
                 )
-                if not isinstance(s, (IRI, BNode)) or not isinstance(p, IRI):
+                if not isinstance(p, IRI):
                     raise ExpressionError("invalid instantiated triple term")
                 return TripleTerm(s, p, o)
             return term
@@ -84,7 +84,7 @@ def evaluate_rule(
         for head in rule.head:
             try:
                 s, p, o = (substitute(t) for t in head)
-                if isinstance(s, (IRI, BNode)) and isinstance(p, IRI):
+                if isinstance(p, IRI):
                     output.add((s, p, o))
             except ExpressionError:
                 continue
