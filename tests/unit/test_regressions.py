@@ -47,3 +47,27 @@ def test_language_tags_and_string_datatypes_compare_by_rdf_equality():
 def test_blank_node_generation_cannot_collide_with_later_label():
     rules = parse_rules("DATA {[] <urn:p> 1 . _:genid0 <urn:p> 2}")
     assert len({s for s, p, o in rules.data}) == 2
+
+
+def test_data_blank_nodes_are_distinct_from_base():
+    result = infer("DATA {_:same <urn:p> 1}", "_:same <urn:p> 2 .", include_base=True)
+    assert len({s for s, p, o in result}) == 2
+
+
+def test_triple_term_in_head_preserves_nested_variables():
+    result = infer(
+        "RULE {<urn:s> <urn:p> <<( ?x <urn:p> ?y )>>} WHERE {?x <urn:q> ?y}",
+        "<urn:a> <urn:q> <urn:b> .",
+    )
+    assert next(iter(result))[2] == TripleTerm(IRI("urn:a"), IRI("urn:p"), IRI("urn:b"))
+
+
+def test_import_cycle_uses_retrieval_uri_despite_declared_base(tmp_path):
+    from sparql_rl.imports import ImportResolver
+
+    source = tmp_path / "rules.srl"
+    source.write_text(
+        f"BASE <urn:other:> IMPORTS <{source.as_uri()}> DATA {{[] <urn:p> 1}}"
+    )
+    rules = parse_rules(source.read_text(), base_iri=source.as_uri())
+    assert len(ImportResolver().resolve(rules).data) == 1

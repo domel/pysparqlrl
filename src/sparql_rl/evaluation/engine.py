@@ -13,7 +13,7 @@ from sparql_rl.model import (
     TriplePatternElement,
     Variable,
 )
-from sparql_rl.rdf.io import Graph
+from sparql_rl.rdf.io import Graph, merge_graphs
 from sparql_rl.rdf.parser import IRI, BNode, Node, TripleTerm
 
 from .expressions import Context, ebv, evaluate
@@ -92,7 +92,7 @@ def evaluate_rule(
 
 
 def evaluate_rules(prepared: PreparedRuleSet, base_graph: Graph) -> Graph:
-    data_graph = Graph(prepared.rule_set.data)
+    data_graph = merge_graphs([Graph(prepared.rule_set.data)])
     evaluation_graph = Graph(base_graph)
     evaluation_graph.update(data_graph)
     inference_graph = Graph(t for t in data_graph if t not in base_graph)

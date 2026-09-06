@@ -89,6 +89,7 @@ class Path(IRI):
 class RuleParser(TurtleParser):
     def __init__(self, text: str, source: str = "<rules>", base_iri: str | None = None):
         super().__init__(text, source, base_iri)
+        self.document_iri = base_iri
         self.context = "data"
         self.counter = 0
         if any(0xD800 <= ord(c) <= 0xDFFF for c in text):
@@ -237,7 +238,7 @@ class RuleParser(TurtleParser):
             else:
                 self.scanner.error("expected prologue, RULE or DATA")
             self.ws()
-        return RuleSet(tuple(rules), tuple(data), tuple(imports), self.base_iri)
+        return RuleSet(tuple(rules), tuple(data), tuple(imports), self.document_iri)
 
     def block(self, context: str) -> tuple[RuleElement, ...]:
         previous = self.context
