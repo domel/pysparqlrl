@@ -211,3 +211,12 @@ def test_bash_launcher_from_another_directory(tmp_path):
     )
     assert process.returncode == 1
     assert process.stdout.strip() == "false"
+
+
+def test_rules_base_does_not_change_import_identity(tmp_path, capsys):
+    source = tmp_path / "self.srl"
+    source.write_text(f"IMPORTS <{source.as_uri()}> DATA {{ [] <urn:p> 1 }}")
+    assert (
+        main(["infer", "-r", str(source), "--rules-base", "http://example/base/"]) == 0
+    )
+    assert len(parse_data(capsys.readouterr().out)) == 1

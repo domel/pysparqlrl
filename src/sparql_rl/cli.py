@@ -108,6 +108,7 @@ def read_rules(args: argparse.Namespace) -> RuleSet:
             base_iri=args.rules_base
             or (Path(f).resolve().as_uri() if f != "-" else None),
             source_name=f,
+            document_iri=Path(f).resolve().as_uri() if f != "-" else None,
         )
         for f in args.rules
     ]

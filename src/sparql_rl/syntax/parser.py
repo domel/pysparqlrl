@@ -518,6 +518,13 @@ class RuleParser(TurtleParser):
 
 
 def parse_rules(
-    text: str, *, base_iri: str | None = None, source_name: str | None = None
+    text: str,
+    *,
+    base_iri: str | None = None,
+    source_name: str | None = None,
+    document_iri: str | None = None,
 ) -> RuleSet:
-    return RuleParser(text, source_name or "<rules>", base_iri).document()
+    parser = RuleParser(text, source_name or "<rules>", base_iri)
+    if document_iri is not None:
+        parser.document_iri = document_iri
+    return parser.document()
