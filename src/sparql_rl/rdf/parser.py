@@ -256,17 +256,8 @@ def decode_uchar(scanner: Scanner) -> str:
 
     if scanner.consume("\\u"):
         codepoint = read_hex4()
-        if 0xD800 <= codepoint <= 0xDBFF:
-            # Surrogate pair is allowed only when followed by another \\u low surrogate.
-            if not scanner.consume("\\u"):
-                scanner.error("high surrogate must be followed by low surrogate")
-            low = read_hex4()
-            if not (0xDC00 <= low <= 0xDFFF):
-                scanner.error("invalid low surrogate in pair")
-            scalar = 0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00)
-            return chr(scalar)
-        if 0xDC00 <= codepoint <= 0xDFFF:
-            scanner.error("lone low surrogate is not allowed")
+        if 0xD800 <= codepoint <= 0xDFFF:
+            scanner.error("surrogate code points are not allowed")
         return chr(codepoint)
     if scanner.consume("\\U"):
         digits = []
@@ -941,7 +932,7 @@ class NTriplesParser(BaseParser):
         self.scanner.expect(")>>", "expected ')>>' to close triple term")
         return TripleTerm(subject=subject, predicate=predicate, object=obj)
 
-    def parse_tt_subject(self) -> IRI | BNode:
+    def parse_tt_subject(self) -> Node:
         """Parse triple-term subject from the current input and return the result."""
         ch = self.scanner.peek()
         if ch == "<":
@@ -1319,7 +1310,7 @@ class TurtleParser(BaseParser):
         self.emit(ref_subject, IRI(RDF_REIFIES_IRI), term)
         return ref_subject, term
 
-    def parse_rt_subject(self) -> IRI | BNode | TripleTerm:
+    def parse_rt_subject(self) -> Node:
         """Parse reified-triple subject from the current input and return the result."""
         if self.scanner.startswith("<<") and not self.scanner.startswith("<<("):
             _, term = self.parse_reified_triple(needs_subject_reference=False)
@@ -1369,7 +1360,7 @@ class TurtleParser(BaseParser):
         self.scanner.expect(")>>", "expected ')>>' to close triple term")
         return TripleTerm(subject=subject, predicate=predicate, object=obj)
 
-    def parse_tt_subject(self) -> IRI | BNode:
+    def parse_tt_subject(self) -> Node:
         """Parse triple-term subject from the current input and return the result."""
         if self.scanner.startswith("_:"):
             return self.parse_blank_node_label()

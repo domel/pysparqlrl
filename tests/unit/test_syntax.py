@@ -54,3 +54,33 @@ def test_source_location():
 def test_dollar_and_question_variables_are_identical():
     rule = parse_rules(P + "RULE {$s :out ?o} WHERE {?s :p $o}").rules[0]
     assert variables(rule.head) == {Variable("s"), Variable("o")}
+
+
+@pytest.mark.parametrize("body", ["FILTER(true) .", "SET(?x := 1) .", "NOT {} ."])
+def test_dot_after_non_triple_element(body):
+    parse_rules(f"RULE {{}} WHERE {{{body}}}")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "FILTER true",
+        "FILTER ?x",
+        'FILTER STR(1) = "1"',
+        "SET(?x := [])",
+        "SET(?x := (1 < 2 < 3))",
+        "?s ?p/<urn:q> ?o",
+        "?s <urn:p> <<( <urn:a> <urn:p>/<urn:q> <urn:b> )>>",
+    ],
+)
+def test_reject_non_grammar_forms(body):
+    with pytest.raises(ParseError):
+        parse_rules(f"RULE {{}} WHERE {{{body}}}")
+
+
+def test_nested_symmetric_triple_terms():
+    parse_rules("DATA {<urn:s> <urn:p> <<( <<( 1 <urn:p> 2 )>> <urn:p> 3 )>>}")
+
+
+def test_boolean_keywords_case_insensitive():
+    parse_rules("DATA {<urn:s> <urn:p> TRUE, FALSE}")

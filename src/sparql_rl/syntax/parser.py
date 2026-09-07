@@ -17,8 +17,11 @@ from sparql_rl.model import (
 )
 from sparql_rl.rdf.parser import (
     IRI,
+    XSD_NS,
+    Literal,
     Node,
     Triple,
+    TripleTerm,
     TurtleParser,
     is_keyword_ci_with_extra_boundary,
     skip_ws_comments,
@@ -92,6 +95,7 @@ class RuleParser(TurtleParser):
         self.document_iri = base_iri
         self.context = "data"
         self.counter = 0
+        self.path_allowed = True
         if any(0xD800 <= ord(c) <= 0xDFFF for c in text):
             self.scanner.error("Unicode surrogate is not permitted")
 
@@ -139,6 +143,54 @@ class RuleParser(TurtleParser):
             return Variable(name)
         return super().parse_iri()
 
+    def parse_object(self) -> Node:
+        for word in ("true", "false"):
+            if self.keyword(word):
+                return Literal(word, datatype=XSD_NS + "boolean")
+        return super().parse_object()
+
+    def parse_tt_subject(self) -> Node:
+        if self.context == "expression" and self.scanner.startswith("<<("):
+            self.scanner.error(
+                "nested triple term is not permitted as expression triple subject"
+            )
+        return self.parse_tt_object()
+
+    def parse_tt_object(self) -> Node:
+        if self.scanner.startswith("<<") and not self.scanner.startswith("<<("):
+            self.scanner.error("reified syntax is not allowed inside a triple term")
+        if self.scanner.peek() == "[":
+            if self.context == "expression":
+                self.scanner.error("blank nodes are not expression terms")
+            return self.parse_rt_empty_blank_node()
+        if self.scanner.peek() == "(":
+            self.scanner.error("collections are not triple-term components")
+        if self.context == "expression" and self.scanner.startswith("_:"):
+            self.scanner.error("blank nodes are not expression terms")
+        return self.parse_object()
+
+    def parse_rt_subject(self) -> Node:
+        return self.parse_rt_object()
+
+    def parse_triple_term(self) -> TripleTerm:
+        previous = self.path_allowed
+        self.path_allowed = False
+        try:
+            return super().parse_triple_term()
+        finally:
+            self.path_allowed = previous
+
+    def constraint(self) -> Expression | Node:
+        # W3C [16]-[18]: FILTER accepts a bracketed expression or function call.
+        if self.scanner.consume("("):
+            value = self.expression()
+            self.expect(")")
+            return value
+        value = self.expression(6)
+        if not isinstance(value, Expression) or value.operator.startswith("unary"):
+            self.scanner.error("FILTER requires parentheses or a function call")
+        return value
+
     def parse_subject(self) -> Node:
         return self.parse_object()
 
@@ -152,8 +204,8 @@ class RuleParser(TurtleParser):
         return super().parse_pairs_structure(terminators + ("}",), allow_a_verb)
 
     def parse_verb(self, allow_a: bool) -> IRI:
-        # W3C [29]-[33]: finite inverse and sequence paths.
-        if self.context not in ("body", "negation"):
+        # W3C [72]-[75]: finite inverse and sequence paths.
+        if not self.path_allowed or self.context not in ("body", "negation"):
             return super().parse_verb(allow_a)
         steps: list[tuple[IRI, bool]] = []
         while True:
@@ -176,6 +228,10 @@ class RuleParser(TurtleParser):
             self.ws()
             if not self.scanner.consume("/"):
                 break
+        if any(isinstance(p, Variable) for p, inverse in steps) and (
+            len(steps) != 1 or steps[0][1]
+        ):
+            self.scanner.error("variables cannot be used inside property paths")
         if len(steps) == 1 and not steps[0][1]:
             return steps[0][0]
         return Path("@path", tuple(steps))
@@ -248,7 +304,7 @@ class RuleParser(TurtleParser):
         while not self.scanner.consume("}"):
             self.ws()
             if context in ("body", "negation") and self.keyword("FILTER"):
-                elements.append(FilterElement(self.expression()))
+                elements.append(FilterElement(self.constraint()))
             elif context == "body" and self.keyword("NOT"):
                 data_only = self.keyword("DATA")
                 elements.append(NegationElement(self.block("negation"), data_only))
@@ -277,6 +333,8 @@ class RuleParser(TurtleParser):
                 ):
                     self.scanner.error("expected '.' between triple patterns")
             self.ws()
+            if elements and not isinstance(elements[-1], TriplePatternElement):
+                self.scanner.consume(".")
             self.ws()
         self.context = previous
         self.ws()
@@ -333,7 +391,21 @@ class RuleParser(TurtleParser):
                     self.scanner.error(f"invalid argument count for {name}")
                 left = Expression(name, arguments)
             else:
-                left = self.parse_object()
+                if (
+                    self.scanner.peek() == "["
+                    or self.scanner.startswith("_:")
+                    or (
+                        self.scanner.startswith("<<")
+                        and not self.scanner.startswith("<<(")
+                    )
+                ):
+                    self.scanner.error("invalid expression term")
+                previous = self.context
+                self.context = "expression"
+                try:
+                    left = self.parse_object()
+                finally:
+                    self.context = previous
                 self.ws()
                 if (
                     isinstance(left, IRI)
@@ -355,6 +427,7 @@ class RuleParser(TurtleParser):
             "*": 5,
             "/": 5,
         }
+        relational_seen = False
         while True:
             self.ws()
             mark = self.scanner.mark()
@@ -390,6 +463,12 @@ class RuleParser(TurtleParser):
             )
             if op is None or precedence[op] < minimum:
                 break
+            if precedence[op] == 3:
+                if relational_seen:
+                    self.scanner.error(
+                        "chained relational operators require parentheses"
+                    )
+                relational_seen = True
             self.scanner.consume(op)
             left = Expression(op, (left, self.expression(precedence[op] + 1)))
         return left
