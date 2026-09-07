@@ -56,7 +56,9 @@ def evaluate_rule(
     rule: Rule, evaluation_graph: Graph, base_graph: Graph, context: Context
 ) -> Graph:
     graph = base_graph if rule.data_only else evaluation_graph
-    solutions = evaluate_body(rule.body, graph, base_graph, [{}], context)
+    solutions = evaluate_body(
+        rule.body, graph, base_graph, [{}], context.for_rule(rule.base_iri)
+    )
     output = Graph()
     for solution in solutions:
         blanks: dict[BNode, BNode] = {}

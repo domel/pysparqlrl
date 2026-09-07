@@ -48,6 +48,7 @@ class Rule:
     data_only: bool = False
     identifier: IRI | None = None
     source: str | None = None
+    base_iri: str | None = None
 
 
 @dataclass(frozen=True)

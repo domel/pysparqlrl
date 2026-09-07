@@ -307,6 +307,7 @@ class RuleParser(TurtleParser):
                         data_only,
                         identifier,
                         self.scanner.source,
+                        self.base_iri,
                     )
                 )
             else:

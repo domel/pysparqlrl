@@ -4,7 +4,7 @@ import math
 import operator
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
@@ -14,7 +14,16 @@ import regex as safe_regex
 
 from sparql_rl.errors import ExpressionError
 from sparql_rl.model import Expression, Variable
-from sparql_rl.rdf.parser import IRI, XSD_NS, BNode, Literal, Node, TripleTerm
+from sparql_rl.rdf.parser import (
+    IRI,
+    XSD_NS,
+    BNode,
+    Literal,
+    Node,
+    TripleTerm,
+    resolve_iri_reference,
+    validate_iri,
+)
 
 NUMERIC = {
     XSD_NS + x
@@ -55,7 +64,14 @@ class Context:
         )
     )
     functions: FunctionRegistry = field(default_factory=FunctionRegistry)
-    blank_nodes: dict[tuple[int, str], BNode] = field(default_factory=dict)
+    base_iri: str | None = None
+    # Retain mappings for this rule invocation so their identities cannot be reused.
+    blank_nodes: dict[int, tuple[dict[Variable, Node], dict[str, BNode]]] = field(
+        default_factory=dict
+    )
+
+    def for_rule(self, base_iri: str | None) -> "Context":
+        return replace(self, base_iri=base_iri, blank_nodes={})
 
 
 def number(node: Node) -> Decimal | float:
@@ -209,8 +225,8 @@ def _evaluate(
     if op == "BNODE":
         if not values:
             return BNode(uuid4().hex)
-        key = (id(solution), string(values[0]))
-        return context.blank_nodes.setdefault(key, BNode(uuid4().hex))
+        _, nodes = context.blank_nodes.setdefault(id(solution), (solution, {}))
+        return nodes.setdefault(string(values[0]), BNode(uuid4().hex))
     if op == "CONCAT":
         joined = "".join(string(v) for v in values)
         if values and all(
@@ -327,7 +343,14 @@ def _evaluate(
             raise ExpressionError("STR requires IRI or literal")
         return Literal(a.value)
     if op in {"IRI", "URI"}:
-        return a if isinstance(a, IRI) else IRI(string(a))
+        if isinstance(a, IRI):
+            return a
+        iri_value = string(a)
+        validate_iri(iri_value, require_absolute=False, allow_empty=True)
+        if context.base_iri is not None:
+            iri_value = resolve_iri_reference(context.base_iri, iri_value)
+        validate_iri(iri_value, require_absolute=True, allow_empty=False)
+        return IRI(iri_value)
     if op in {"LANG", "LANGDIR", "DATATYPE"}:
         if not isinstance(a, Literal):
             raise ExpressionError("literal required")

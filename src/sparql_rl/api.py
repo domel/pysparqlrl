@@ -81,18 +81,22 @@ def query(
         include_base=True,
         import_resolver=import_resolver,
     )
+    base_iri = goal_base_iri
     if isinstance(goal, str):
         parser = RuleParser(goal, "<goal>", goal_base_iri)
         parser.ws()
         while parser.parse_directive_if_present():
             parser.ws()
         body = parser.block("body")
+        base_iri = parser.base_iri
         if not parser.scanner.eof():
             parser.scanner.error("unexpected text after goal")
     else:
         body = goal
     defined = validate_body(body, set())
-    solutions = evaluate_body(body, graph, as_graph(data), [{}], Context())
+    solutions = evaluate_body(
+        body, graph, as_graph(data), [{}], Context(base_iri=base_iri)
+    )
     public = tuple(
         sorted(
             (v for v in defined if not v.value.startswith("@")), key=lambda v: v.value

@@ -119,3 +119,55 @@ def test_function_families(call, expected):
 def test_function_type_errors(call):
     with pytest.raises(ExpressionError):
         expression(call)
+
+
+def test_bnode_is_fresh_across_rule_solutions():
+    from sparql_rl import infer
+
+    rules = "\n".join(
+        f'RULE {{ <urn:s{i}> <urn:p> ?b }} WHERE {{ SET(?b := BNODE("key")) }}'
+        for i in range(1000)
+    )
+    graph = infer(rules)
+    assert len(graph) == 1000
+    assert len({o for s, p, o in graph}) == 1000
+    assert expression('sameTerm(BNODE("x"), BNODE("x"))') == literal(True)
+    assert expression('sameTerm(BNODE("x"), BNODE("y"))') == literal(False)
+
+
+def test_iri_uses_sequential_rule_base():
+    from sparql_rl import infer
+    from sparql_rl.rdf.parser import IRI
+
+    graph = infer("""
+        BASE <http://example/first/>
+        RULE { <urn:a> <urn:p> ?v } WHERE { SET(?v := IRI("child")) }
+        BASE <http://example/second/>
+        RULE { <urn:b> <urn:p> ?v } WHERE { SET(?v := URI("../child")) }
+    """)
+    assert set(graph) == {
+        (IRI("urn:a"), IRI("urn:p"), IRI("http://example/first/child")),
+        (IRI("urn:b"), IRI("urn:p"), IRI("http://example/child")),
+    }
+
+
+@pytest.mark.parametrize("value", ["child", "http://example/a b", "http://[bad"])
+def test_iri_requires_a_valid_absolute_result(value):
+    with pytest.raises(ExpressionError):
+        expression(f'IRI("{value}")')
+
+
+def test_imported_rule_and_query_goal_keep_their_own_base(tmp_path):
+    from sparql_rl import infer, parse_rules, query
+    from sparql_rl.rdf.parser import IRI
+
+    imported = tmp_path / "imported.srl"
+    imported.write_text(
+        'BASE <http://imported/> RULE { <urn:s> <urn:p> ?v } WHERE { SET(?v := IRI("child")) }'
+    )
+    rules = parse_rules(f"BASE <http://root/> IMPORTS <{imported.as_uri()}>")
+    assert set(infer(rules)) == {
+        (IRI("urn:s"), IRI("urn:p"), IRI("http://imported/child"))
+    }
+    result = query(rules, None, 'BASE <http://goal/> { SET(?v := IRI("child")) }')
+    assert next(iter(result.bindings[0].values())) == IRI("http://goal/child")
