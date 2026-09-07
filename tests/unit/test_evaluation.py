@@ -111,3 +111,21 @@ def test_now_is_stable():
 def test_ebv_errors(node):
     with pytest.raises(ExpressionError):
         ebv(node)
+
+
+def test_explicit_function_registry():
+    from sparql_rl import FunctionRegistry, infer
+
+    registry = FunctionRegistry()
+    registry.register("urn:double", lambda term: literal(int(term.value) * 2))
+    result = infer(
+        "RULE {<urn:s> <urn:p> ?x} WHERE {SET(?x := <urn:double>(3))}",
+        function_registry=registry,
+    )
+    assert next(iter(result))[2] == literal(6)
+
+
+def test_regex_timeout_is_solution_error():
+    expr = Expression("REGEX", (Literal("a" * 20000 + "!"), Literal("(a+)+$")))
+    with pytest.raises(ExpressionError):
+        evaluate(expr, {}, Context())

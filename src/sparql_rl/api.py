@@ -6,7 +6,7 @@ import rdflib
 
 from sparql_rl.analysis import PreparedRuleSet, build_dependency_graph, stratify
 from sparql_rl.evaluation.engine import evaluate_body, evaluate_rules
-from sparql_rl.evaluation.expressions import Context
+from sparql_rl.evaluation.expressions import Context, FunctionRegistry
 from sparql_rl.evaluation.matcher import SolutionMapping
 from sparql_rl.imports import ImportResolver
 from sparql_rl.model import RuleElement, RuleSet, Variable
@@ -33,6 +33,7 @@ def infer(
     data_format: str | None = None,
     data_base_iri: str | None = None,
     include_base: bool = False,
+    function_registry: FunctionRegistry | None = None,
     import_resolver: ImportResolver | None = None,
 ) -> Graph:
     if isinstance(rule_set, str):
@@ -43,7 +44,9 @@ def infer(
         else prepare_rules(rule_set, import_resolver=import_resolver)
     )
     base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
-    result = evaluate_rules(prepared, base)
+    result = evaluate_rules(
+        prepared, base, Context(functions=function_registry or FunctionRegistry())
+    )
     if include_base:
         result.update(base)
     return result

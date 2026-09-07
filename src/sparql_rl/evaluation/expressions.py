@@ -10,6 +10,8 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 from uuid import uuid4
 
+import regex as safe_regex
+
 from sparql_rl.errors import ExpressionError
 from sparql_rl.model import Expression, Variable
 from sparql_rl.rdf.parser import IRI, XSD_NS, BNode, Literal, Node, TripleTerm
@@ -104,6 +106,16 @@ def string(node: Node) -> str:
     return node.value
 
 
+def string_result(value: str, original: Node) -> Literal:
+    assert isinstance(original, Literal)
+    return Literal(
+        value,
+        lang=original.lang,
+        direction=original.direction,
+        datatype=original.datatype,
+    )
+
+
 def equal(a: Node, b: Node) -> bool:
     if isinstance(a, Literal) and isinstance(b, Literal):
         if a.datatype in NUMERIC and b.datatype in NUMERIC:
@@ -129,6 +141,8 @@ def evaluate(
         IndexError,
         KeyError,
         re.error,
+        safe_regex.error,
+        TimeoutError,
     ) as error:
         if isinstance(error, ExpressionError):
             raise
@@ -198,7 +212,16 @@ def _evaluate(
         key = (id(solution), string(values[0]))
         return context.blank_nodes.setdefault(key, BNode(uuid4().hex))
     if op == "CONCAT":
-        return Literal("".join(string(v) for v in values))
+        joined = "".join(string(v) for v in values)
+        if values and all(
+            isinstance(v, Literal)
+            and isinstance(values[0], Literal)
+            and v.lang == values[0].lang
+            and v.direction == values[0].direction
+            for v in values
+        ):
+            return string_result(joined, values[0])
+        return Literal(joined)
     if op in context.functions.functions:
         return context.functions.functions[op](*values)
     a = values[0]
@@ -206,12 +229,30 @@ def _evaluate(
         if not isinstance(a, (Literal, IRI)):
             raise ExpressionError("invalid cast")
         datatype = op[len(XSD_NS) :]
+        if datatype not in {
+            "string",
+            "boolean",
+            "integer",
+            "int",
+            "long",
+            "decimal",
+            "double",
+            "float",
+            "dateTime",
+            "date",
+            "time",
+            "dayTimeDuration",
+            "duration",
+        }:
+            raise ExpressionError(f"unknown constructor: {op}")
         text = a.value
         if datatype in {"integer", "int", "long"}:
             text = str(int(Decimal(text)))
         elif datatype in {"decimal", "double", "float"}:
             text = str(Decimal(text))
         elif datatype == "boolean":
+            if isinstance(a, Literal) and a.datatype in (None, XSD_NS + "string"):
+                return literal(ebv(Literal(a.value, datatype=XSD_NS + "boolean")))
             return literal(ebv(a))
         return Literal(text, datatype=None if datatype == "string" else op)
     if op == "unary!":
@@ -315,7 +356,7 @@ def _evaluate(
         return Literal(string(a), datatype=values[1].value)
     if op in {"ABS", "CEIL", "FLOOR", "ROUND"}:
         value = number(a)
-        return literal(
+        rounded = (
             abs(value)
             if op == "ABS"
             else math.ceil(value)
@@ -326,6 +367,8 @@ def _evaluate(
                 value + Decimal("0.5") if isinstance(value, Decimal) else value + 0.5
             )
         )
+        assert isinstance(a, Literal)
+        return Literal(str(rounded), datatype=a.datatype)
     if op in {"YEAR", "MONTH", "DAY", "HOURS", "MINUTES", "SECONDS", "TIMEZONE", "TZ"}:
         if not isinstance(a, Literal):
             raise ExpressionError("date/time literal required")
@@ -356,17 +399,15 @@ def _evaluate(
                 "DAY": date.day,
                 "HOURS": date.hour,
                 "MINUTES": date.minute,
-                "SECONDS": date.second,
+                "SECONDS": Decimal(date.second)
+                + Decimal(date.microsecond) / Decimal(1000000),
             }[op]
         )
     text = string(a)
     if op == "STRLEN":
         return literal(len(text))
     if op in {"UCASE", "LCASE"}:
-        return Literal(
-            text.upper() if op == "UCASE" else text.lower(),
-            lang=a.lang if isinstance(a, Literal) else None,
-        )
+        return string_result(text.upper() if op == "UCASE" else text.lower(), a)
     if op == "ENCODE_FOR_URI":
         return Literal(quote(text, safe="-._~"))
     if op == "SUBSTR":
@@ -376,7 +417,7 @@ def _evaluate(
             if len(values) == 3
             else len(text)
         )
-        return Literal(text[max(0, start) : max(0, end)])
+        return string_result(text[max(0, start) : max(0, end)], a)
     other = string(values[1])
     if op == "LANGMATCHES":
         return literal(
@@ -396,7 +437,7 @@ def _evaluate(
     if op in {"STRBEFORE", "STRAFTER"}:
         if other not in text:
             return Literal("")
-        return Literal(text.partition(other)[0 if op == "STRBEFORE" else 2])
+        return string_result(text.partition(other)[0 if op == "STRBEFORE" else 2], a)
     if op in {"REGEX", "REPLACE"}:
         flags_index = 2 if op == "REGEX" else 3
         flags_text = string(values[flags_index]) if len(values) > flags_index else ""
@@ -405,7 +446,11 @@ def _evaluate(
             for f in set(flags_text)
         )
         if op == "REGEX":
-            return literal(re.search(other, text, flags) is not None)
+            return literal(
+                safe_regex.search(other, text, flags, timeout=0.1) is not None
+            )
         replacement = re.sub(r"\$(\d+)", r"\\g<\1>", string(values[2]))
-        return Literal(re.sub(other, replacement, text, flags=flags))
+        return string_result(
+            safe_regex.sub(other, replacement, text, flags=flags, timeout=0.1), a
+        )
     raise ExpressionError(f"unknown function: {op}")

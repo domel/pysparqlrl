@@ -91,12 +91,14 @@ def evaluate_rule(
     return output
 
 
-def evaluate_rules(prepared: PreparedRuleSet, base_graph: Graph) -> Graph:
+def evaluate_rules(
+    prepared: PreparedRuleSet, base_graph: Graph, context: Context | None = None
+) -> Graph:
     data_graph = merge_graphs([Graph(prepared.rule_set.data)])
     evaluation_graph = Graph(base_graph)
     evaluation_graph.update(data_graph)
     inference_graph = Graph(t for t in data_graph if t not in base_graph)
-    context = Context()
+    context = context or Context()
 
     def run(rule: Rule) -> bool:
         generated = evaluate_rule(rule, evaluation_graph, base_graph, context)
