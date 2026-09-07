@@ -58,7 +58,9 @@ class ImportResolver:
             ) from error
 
     def resolve(self, root: RuleSet) -> RuleSet:
-        visited = {urldefrag(root.source)[0]} if root.source else set()
+        visited = {urldefrag(uri)[0] for uri in root.source_iris}
+        if root.source:
+            visited.add(urldefrag(root.source)[0])
         queue = [root]
         rules: list[Rule] = []
         graphs = []

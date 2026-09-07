@@ -128,3 +128,54 @@ def test_module_and_executable():
             [*command, "--version"], capture_output=True, text=True, check=True
         )
         assert "2026-09-02" in process.stdout
+
+
+def test_additional_formats_stats_and_aliases(capsys):
+    assert main(["infer", "-R", RULES, "-D", DATA, "-f", "rdfxml", "--stats"]) == 0
+    output = capsys.readouterr()
+    assert "<rdf:RDF" in output.out
+    assert json.loads(output.err)["exit_code"] == 0
+    assert (
+        main(
+            [
+                "query",
+                "-R",
+                RULES,
+                "-D",
+                DATA,
+                "--goal",
+                "{?s <urn:q> ?o}",
+                "--result-format",
+                "tsv",
+            ]
+        )
+        == 0
+    )
+
+
+def test_dataset_policy_and_rdf_error(capsys):
+    data = "<urn:g> {<urn:a> <urn:p> <urn:b>}"
+    assert main(["infer", "-R", RULES, "-D", data, "--data-string-format", "trig"]) == 7
+    assert (
+        main(
+            [
+                "infer",
+                "-R",
+                RULES,
+                "-D",
+                data,
+                "--data-string-format",
+                "trig",
+                "--dataset-policy",
+                "union",
+            ]
+        )
+        == 0
+    )
+
+
+def test_explicit_rule_file_is_not_reimported(tmp_path, capsys):
+    source = tmp_path / "root.srl"
+    source.write_text("IMPORTS <root.srl> DATA {[] <urn:p> 1}")
+    assert main(["infer", "-r", str(source)]) == 0
+    assert len(parse_data(capsys.readouterr().out)) == 1

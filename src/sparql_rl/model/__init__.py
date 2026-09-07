@@ -56,6 +56,7 @@ class RuleSet:
     data: tuple[Triple, ...] = ()
     imports: tuple[str, ...] = ()
     source: str | None = None
+    source_iris: tuple[str, ...] = ()
 
 
 def variables(value: object) -> set[Variable]:

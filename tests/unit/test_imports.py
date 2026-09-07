@@ -47,3 +47,36 @@ def test_import_limits_and_errors(tmp_path):
         ImportResolver().resolve(root)
     with pytest.raises(ImportResolutionError, match="limit"):
         ImportResolver(max_documents=0).resolve(root)
+
+
+def test_http_import_and_redirect_policy():
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from threading import Thread
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "/rules")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"DATA {<urn:s> <urn:p> 1}")
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        resolver = ImportResolver(allow_network=True)
+        assert len(resolver.resolve(parse_rules(f"IMPORTS <{base}/rules>")).data) == 1
+        with pytest.raises(ImportResolutionError, match="redirects"):
+            resolver.read(base + "/redirect")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()

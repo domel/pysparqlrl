@@ -5,6 +5,7 @@ import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from time import perf_counter
 
 from sparql_rl import infer, parse_rules, prepare_rules, query, validate_rules
 from sparql_rl.errors import (
@@ -43,6 +44,14 @@ def parser() -> argparse.ArgumentParser:
         sub.add_argument("--rules-base")
         sub.add_argument("--data-base")
         sub.add_argument("--data-format", choices=("turtle", "ttl", "nt", "ntriples"))
+        sub.add_argument(
+            "--data-string-format",
+            choices=("turtle", "nt", "rdfxml", "jsonld", "trig", "nquads"),
+        )
+        sub.add_argument(
+            "--dataset-policy", choices=("error", "union"), default="error"
+        )
+        sub.add_argument("--stats", action="store_true")
         sub.add_argument("--allow-network-imports", action="store_true")
         sub.add_argument("--import-root", type=Path)
         sub.add_argument("--debug", action="store_true")
@@ -50,7 +59,10 @@ def parser() -> argparse.ArgumentParser:
         if command == "infer":
             sub.add_argument("--include-base", action="store_true")
             sub.add_argument(
-                "--output-format", default="turtle", choices=("turtle", "nt")
+                "-f",
+                "--output-format",
+                default="turtle",
+                choices=("turtle", "nt", "rdfxml", "jsonld"),
             )
         elif command == "query":
             goals = sub.add_mutually_exclusive_group(required=True)
@@ -59,9 +71,10 @@ def parser() -> argparse.ArgumentParser:
             sub.add_argument("--goal-base")
             sub.add_argument(
                 "--format",
+                "--result-format",
                 "--output-format",
                 default="table",
-                choices=("table", "json", "boolean"),
+                choices=("table", "json", "boolean", "tsv"),
             )
         elif command == "check":
             sub.add_argument(
@@ -103,15 +116,22 @@ def read_rules(args: argparse.Namespace) -> RuleSet:
         tuple(r for rs in inputs for r in rs.rules),
         tuple(merge_graphs(Graph(rs.data) for rs in inputs)),
         tuple(i for rs in inputs for i in rs.imports),
+        source_iris=tuple(rs.source for rs in inputs if rs.source),
     )
 
 
 def read_data(args: argparse.Namespace) -> Graph:
     graphs = []
     for filename in args.data:
-        format = args.data_format or (
-            "nt" if Path(filename).suffix == ".nt" else "turtle"
-        )
+        format = args.data_format or {
+            ".nt": "nt",
+            ".rdf": "rdfxml",
+            ".xml": "rdfxml",
+            ".jsonld": "jsonld",
+            ".json": "jsonld",
+            ".trig": "trig",
+            ".nq": "nquads",
+        }.get(Path(filename).suffix, "turtle")
         graphs.append(
             parse_data(
                 read_text(filename),
@@ -119,10 +139,16 @@ def read_data(args: argparse.Namespace) -> Graph:
                 base_iri=args.data_base
                 or (Path(filename).resolve().as_uri() if filename != "-" else None),
                 source_name=filename,
+                dataset_policy=args.dataset_policy,
             )
         )
     graphs.extend(
-        parse_data(t, format=args.data_format or "turtle", base_iri=args.data_base)
+        parse_data(
+            t,
+            format=args.data_string_format or args.data_format or "turtle",
+            base_iri=args.data_base,
+            dataset_policy=args.dataset_policy,
+        )
         for t in args.data_string
     )
     return merge_graphs(graphs)
@@ -273,7 +299,15 @@ def main(argv: list[str] | None = None) -> int:
     ):
         root.error("stdin may only be consumed by one input")
     try:
+        started = perf_counter()
         output, code = execute(args)
+        if args.stats:
+            print(
+                json.dumps(
+                    {"elapsed_seconds": perf_counter() - started, "exit_code": code}
+                ),
+                file=sys.stderr,
+            )
         if args.output:
             args.output.write_text(output, encoding="utf-8")
         elif output:
