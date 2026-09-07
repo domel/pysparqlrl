@@ -1,6 +1,6 @@
 """Ordered solution joins and recursive RDF 1.2 term matching."""
 
-from sparql_rl.model import Variable
+from sparql_rl.model import Variable, has_blank, variables
 from sparql_rl.rdf.io import Graph
 from sparql_rl.rdf.parser import BNode, Node, Triple, TripleTerm
 
@@ -31,7 +31,15 @@ def graph_match(
 ) -> list[SolutionMapping]:
     results = []
     for solution in incoming:
-        for triple in graph:
+        constrained = tuple(
+            solution.get(term)
+            if isinstance(term, Variable)
+            else None
+            if isinstance(term, BNode) or variables(term) or has_blank(term)
+            else term
+            for term in pattern
+        )
+        for triple in graph.triples((constrained[0], constrained[1], constrained[2])):
             candidate = solution.copy()
             if all(match_node(p, v, candidate) for p, v in zip(pattern, triple)):
                 results.append(candidate)
