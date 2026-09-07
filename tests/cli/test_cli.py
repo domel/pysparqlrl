@@ -179,3 +179,35 @@ def test_explicit_rule_file_is_not_reimported(tmp_path, capsys):
     source.write_text("IMPORTS <root.srl> DATA {[] <urn:p> 1}")
     assert main(["infer", "-r", str(source)]) == 0
     assert len(parse_data(capsys.readouterr().out)) == 1
+
+
+def test_bash_launcher_from_another_directory(tmp_path):
+    from pathlib import Path
+
+    launcher = Path(__file__).resolve().parents[2] / "pysparqlrl.sh"
+    process = subprocess.run(
+        [str(launcher), "infer", "-R", RULES, "-D", DATA],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert len(parse_data(process.stdout)) == 1
+    process = subprocess.run(
+        [
+            str(launcher),
+            "query",
+            "-R",
+            RULES,
+            "--goal",
+            "{?s <urn:q> ?o}",
+            "--result-format",
+            "boolean",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert process.returncode == 1
+    assert process.stdout.strip() == "false"
