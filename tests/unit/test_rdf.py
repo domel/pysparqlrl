@@ -48,3 +48,17 @@ def test_unsafe_external_rdf_references_are_rejected():
         parse_data("<!DOCTYPE doc []>", format="rdfxml")
     with pytest.raises(ValueError, match="cannot represent"):
         parse_data('<urn:s> <urn:p> "hi"@en--ltr .').serialize("rdfxml")
+
+
+def test_merge_preserves_nested_subject_blank_node_sharing():
+    from sparql_rl import infer, parse_rules
+    from sparql_rl.rdf.canonical import isomorphic
+    from sparql_rl.rdf.io import Graph
+
+    rules = parse_rules('DATA { <<( _:b <urn:p> <urn:o> )>> <urn:q> _:b }')
+    source = Graph(rules.data)
+    assert isomorphic(source, infer(rules))
+    merged = merge_graphs([source, source])
+    assert len(merged) == 2
+    assert len({o for s, p, o in merged}) == 2
+    assert all(s.subject == o for s, p, o in merged)

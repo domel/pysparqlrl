@@ -197,10 +197,7 @@ def merge_graphs(graphs: Iterable[Graph]) -> Graph:
                 )
             return node
 
-        def rename_subject(node: Node, scope: str = scope) -> Node:
-            return BNode(scope + node.label) if isinstance(node, BNode) else node
-
-        result.update((rename_subject(s), p, rename(o)) for s, p, o in graph)
+        result.update((rename(s), p, rename(o)) for s, p, o in graph)
     return result
 
 
