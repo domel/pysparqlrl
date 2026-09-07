@@ -18,6 +18,7 @@ from sparql_rl.model import (
 from sparql_rl.rdf.parser import (
     IRI,
     XSD_NS,
+    BNode,
     Literal,
     Node,
     Triple,
@@ -126,7 +127,7 @@ class RuleParser(TurtleParser):
             self.scanner.error("relative IRI requires a base IRI")
         return iri
 
-    def parse_iri(self) -> IRI:
+    def parse_var_or_iri(self) -> IRI:
         if self.scanner.peek() in ("?", "$"):
             if self.context == "data":
                 self.scanner.error("variables are not allowed in DATA")
@@ -144,6 +145,8 @@ class RuleParser(TurtleParser):
         return super().parse_iri()
 
     def parse_object(self) -> Node:
+        if self.scanner.peek() in ("?", "$"):
+            return self.parse_var_or_iri()
         for word in ("true", "false"):
             if self.keyword(word):
                 return Literal(word, datatype=XSD_NS + "boolean")
@@ -168,6 +171,16 @@ class RuleParser(TurtleParser):
         if self.context == "expression" and self.scanner.startswith("_:"):
             self.scanner.error("blank nodes are not expression terms")
         return self.parse_object()
+
+    def parse_rt_object(self) -> Node:
+        if self.scanner.peek() in ("?", "$"):
+            return self.parse_var_or_iri()
+        return super().parse_rt_object()
+
+    def parse_iri_or_blanknode(self) -> IRI | BNode:
+        if self.scanner.peek() in ("?", "$"):
+            return self.parse_var_or_iri()
+        return super().parse_iri_or_blanknode()
 
     def parse_rt_subject(self) -> Node:
         return self.parse_rt_object()
@@ -203,10 +216,15 @@ class RuleParser(TurtleParser):
     def parse_pairs_structure(self, terminators: tuple[str, ...], allow_a_verb: bool):
         return super().parse_pairs_structure(terminators + ("}",), allow_a_verb)
 
+    def simple_verb(self, allow_a: bool) -> IRI:
+        if self.scanner.peek() in ("?", "$"):
+            return self.parse_var_or_iri()
+        return super().parse_verb(allow_a)
+
     def parse_verb(self, allow_a: bool) -> IRI:
         # W3C [72]-[75]: finite inverse and sequence paths.
         if not self.path_allowed or self.context not in ("body", "negation"):
-            return super().parse_verb(allow_a)
+            return self.simple_verb(allow_a)
         steps: list[tuple[IRI, bool]] = []
         while True:
             self.ws()
@@ -221,7 +239,7 @@ class RuleParser(TurtleParser):
                     else [(nested, False)]
                 )
             else:
-                part = [(super().parse_verb(allow_a), False)]
+                part = [(self.simple_verb(allow_a), False)]
             if reverse:
                 part = [(p, not inv) for p, inv in reversed(part)]
             steps.extend(part)
@@ -310,7 +328,7 @@ class RuleParser(TurtleParser):
                 elements.append(NegationElement(self.block("negation"), data_only))
             elif context == "body" and self.keyword("SET"):
                 self.expect("(")
-                variable = self.parse_iri()
+                variable = self.parse_var_or_iri()
                 if not isinstance(variable, Variable):
                     self.scanner.error("SET target must be a variable")
                 self.expect(":=")
@@ -351,10 +369,17 @@ class RuleParser(TurtleParser):
             left = self.expression()
             self.expect(")")
         else:
+            mark = self.scanner.mark()
             match = re.match(
-                r"[A-Za-z_][A-Za-z_0-9]*(?=\s*\()", self.scanner.text[self.scanner.i :]
+                r"[A-Za-z_][A-Za-z_0-9]*", self.scanner.text[self.scanner.i :]
             )
             if match:
+                for _ in match.group():
+                    self.scanner.advance()
+                self.ws()
+            builtin = bool(match and self.scanner.peek() == "(")
+            self.scanner.reset(mark)
+            if builtin and match:
                 name = match.group().upper()
                 if name not in BUILTINS:
                     self.scanner.error(f"unsupported built-in {name}")
@@ -431,13 +456,19 @@ class RuleParser(TurtleParser):
         while True:
             self.ws()
             mark = self.scanner.mark()
-            if minimum <= 3 and (self.keyword("IN") or self.keyword("NOT")):
-                word = self.scanner.text[mark[0] : self.scanner.i].strip().upper()
-                if word == "NOT" and not self.keyword("IN"):
-                    self.scanner.error("expected IN")
-                left = Expression(
-                    "NOT IN" if word == "NOT" else "IN", (left, *self.arguments())
-                )
+            membership = None
+            if minimum <= 3:
+                if self.keyword("IN"):
+                    membership = "IN"
+                elif self.keyword("NOT"):
+                    if not self.keyword("IN"):
+                        self.scanner.error("expected IN")
+                    membership = "NOT IN"
+            if membership:
+                if relational_seen:
+                    self.scanner.error("only one relational operator is permitted")
+                relational_seen = True
+                left = Expression(membership, (left, *self.arguments()))
                 continue
             self.scanner.reset(mark)
             op = next(

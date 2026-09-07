@@ -84,3 +84,32 @@ def test_nested_symmetric_triple_terms():
 
 def test_boolean_keywords_case_insensitive():
     parse_rules("DATA {<urn:s> <urn:p> TRUE, FALSE}")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "RULE ?id {} WHERE {}",
+        "RULE $id {} WHERE {}",
+        'RULE { <urn:s> <urn:p> "x"^^?type } WHERE {}',
+        'RULE {} WHERE { ?s <urn:p> "x"^^$type }',
+        "RULE {} WHERE {} IMPORTS ?source",
+        "RULE {} WHERE { SET(?x := 1 IN (1) IN (true)) }",
+    ],
+)
+def test_iri_only_positions_and_relational_grammar(text):
+    with pytest.raises(ParseError):
+        parse_rules(text)
+
+
+@pytest.mark.parametrize(
+    "call,plain",
+    [
+        ("STR # comment\n (1)", "STR(1)"),
+        ("1 NOT # comment\n IN (1)", "1 NOT IN (1)"),
+        ("1 IN # comment\n (1)", "1 IN (1)"),
+    ],
+)
+def test_expression_comments_are_whitespace(call, plain):
+    template = "RULE {} WHERE { SET(?x := %s) }"
+    assert parse_rules(template % call) == parse_rules(template % plain)
