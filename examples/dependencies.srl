@@ -1,0 +1,4 @@
+PREFIX : <http://example/>
+
+RULE { ?x :dependsOn ?y } WHERE { ?x :calls ?y }
+RULE { ?x :dependsOn ?z } WHERE { ?x :dependsOn ?y . ?y :dependsOn ?z }
