@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -25,27 +25,15 @@ from sparql_rl.rdf.parser import (
     validate_iri,
 )
 
-NUMERIC = {
-    XSD_NS + x
-    for x in (
-        "integer",
-        "decimal",
-        "double",
-        "float",
-        "int",
-        "long",
-        "short",
-        "byte",
-        "nonNegativeInteger",
-        "positiveInteger",
-        "nonPositiveInteger",
-        "negativeInteger",
-        "unsignedInt",
-        "unsignedLong",
-        "unsignedShort",
-        "unsignedByte",
-    )
-}
+from .datatypes import (
+    NUMERIC,
+    arithmetic,
+    boolean_value,
+    cast_literal,
+    datetime_value,
+    number,
+    promoted,
+)
 
 
 class FunctionRegistry:
@@ -72,19 +60,6 @@ class Context:
 
     def for_rule(self, base_iri: str | None) -> "Context":
         return replace(self, base_iri=base_iri, blank_nodes={})
-
-
-def number(node: Node) -> Decimal | float:
-    if not isinstance(node, Literal) or node.datatype not in NUMERIC:
-        raise ExpressionError("numeric operand required")
-    try:
-        return (
-            float(node.value)
-            if node.datatype in {XSD_NS + "double", XSD_NS + "float"}
-            else Decimal(node.value)
-        )
-    except (ValueError, InvalidOperation) as error:
-        raise ExpressionError("invalid numeric literal") from error
 
 
 def literal(value: object) -> Literal:
@@ -135,9 +110,11 @@ def string_result(value: str, original: Node) -> Literal:
 def equal(a: Node, b: Node) -> bool:
     if isinstance(a, Literal) and isinstance(b, Literal):
         if a.datatype in NUMERIC and b.datatype in NUMERIC:
-            return number(a) == number(b)
+            return operator.eq(*promoted(a, b))
         if a.datatype == b.datatype == XSD_NS + "boolean":
             return ebv(a) == ebv(b)
+        if a.datatype == b.datatype == XSD_NS + "dateTime":
+            return datetime_value(a.value) == datetime_value(b.value)
         if a == b:
             return True
         if a.datatype not in (None, XSD_NS + "string") and a.datatype != b.datatype:
@@ -242,73 +219,40 @@ def _evaluate(
         return context.functions.functions[op](*values)
     a = values[0]
     if op.startswith(XSD_NS):
-        if not isinstance(a, (Literal, IRI)):
-            raise ExpressionError("invalid cast")
-        datatype = op[len(XSD_NS) :]
-        if datatype not in {
-            "string",
-            "boolean",
-            "integer",
-            "int",
-            "long",
-            "decimal",
-            "double",
-            "float",
-            "dateTime",
-            "date",
-            "time",
-            "dayTimeDuration",
-            "duration",
-        }:
-            raise ExpressionError(f"unknown constructor: {op}")
-        text = a.value
-        if datatype in {"integer", "int", "long"}:
-            text = str(int(Decimal(text)))
-        elif datatype in {"decimal", "double", "float"}:
-            text = str(Decimal(text))
-        elif datatype == "boolean":
-            if isinstance(a, Literal) and a.datatype in (None, XSD_NS + "string"):
-                return literal(ebv(Literal(a.value, datatype=XSD_NS + "boolean")))
-            return literal(ebv(a))
-        return Literal(text, datatype=None if datatype == "string" else op)
+        if len(values) != 1:
+            raise ExpressionError("constructor requires one argument")
+        return cast_literal(op, a)
     if op == "unary!":
         return literal(not ebv(a))
     if op in {"unary+", "unary-"}:
-        numeric = number(a) * (-1 if op == "unary-" else 1)
-        return literal(
-            int(numeric)
-            if isinstance(a, Literal) and a.datatype == XSD_NS + "integer"
-            else numeric
-        )
+        numeric = number(a)
+        if op == "unary-":
+            numeric = (
+                numeric.copy_negate() if isinstance(numeric, Decimal) else -numeric
+            )
+        return literal(numeric)
     if op in {"+", "-", "*", "/"}:
-        x, y = number(a), number(values[1])
-        if isinstance(x, float) or isinstance(y, float):
-            x, y = float(x), float(y)
-        result = {
-            "+": operator.add,
-            "-": operator.sub,
-            "*": operator.mul,
-            "/": operator.truediv,
-        }[op](x, y)
-        if op != "/" and all(
-            isinstance(v, Literal) and v.datatype == XSD_NS + "integer" for v in values
-        ):
-            return literal(int(result))
-        return literal(result)
+        return arithmetic(op, a, values[1])
     if op in {"=", "!="}:
         return literal(equal(a, values[1]) == (op == "="))
     if op in {"<", ">", "<=", ">="}:
         b = values[1]
-        cmp_x, cmp_y = (
-            (number(a), number(b))
-            if isinstance(a, Literal) and a.datatype in NUMERIC
-            else (string(a), string(b))
-        )
-        return literal(
-            {"<": operator.lt, ">": operator.gt, "<=": operator.le, ">=": operator.ge}[
-                op
-            ](cmp_x, cmp_y)
-        )
+        compare = {
+            "<": operator.lt,
+            ">": operator.gt,
+            "<=": operator.le,
+            ">=": operator.ge,
+        }[op]
+        if isinstance(a, Literal) and isinstance(b, Literal):
+            if a.datatype in NUMERIC and b.datatype in NUMERIC:
+                return literal(compare(*promoted(a, b)))
+            if a.datatype == b.datatype == XSD_NS + "boolean":
+                return literal(compare(boolean_value(a), boolean_value(b)))
+            if a.datatype == b.datatype == XSD_NS + "dateTime":
+                return literal(
+                    compare(datetime_value(a.value), datetime_value(b.value))
+                )
+        return literal(compare(string(a), string(b)))
     if op == "SAMETERM":
         return literal(a == values[1])
     tests = {

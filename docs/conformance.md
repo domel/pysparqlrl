@@ -56,3 +56,11 @@ imports are denied by default; when enabled, redirects are deliberately rejected
 Serialization is not canonical. Parse diagnostics expose the lowered model,
 not a lossless source-preserving concrete syntax tree. CLI statistics currently
 report elapsed time and exit status, not per-rule execution counters.
+
+Integer arithmetic uses arbitrary-precision integers. Decimal addition,
+subtraction, and multiplication use operand-sized precision; division uses at
+least 34 significant digits. These operations do not inherit the application's
+global decimal context. DateTime comparisons normalize explicit offsets and
+retain fractional-second precision; UTC is the implicit timezone for values
+without an offset. Temporal constructors currently accept strings or values of
+the same datatype, within Python's supported calendar range.

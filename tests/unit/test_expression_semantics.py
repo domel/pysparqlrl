@@ -171,3 +171,116 @@ def test_imported_rule_and_query_goal_keep_their_own_base(tmp_path):
     }
     result = query(rules, None, 'BASE <http://goal/> { SET(?v := IRI("child")) }')
     assert next(iter(result.bindings[0].values())) == IRI("http://goal/child")
+
+
+@pytest.mark.parametrize(
+    "call,expected",
+    [
+        ("1000000000000000000000000000001 + 1", 1000000000000000000000000000002),
+        ("1000000000000000000000000000001 - 1", 1000000000000000000000000000000),
+        ("1000000000000000000000000000001 * 2", 2000000000000000000000000000002),
+        ("-1000000000000000000000000000001", -1000000000000000000000000000001),
+        ('"2"^^<http://www.w3.org/2001/XMLSchema#int> + 1', 3),
+    ],
+)
+def test_integer_arithmetic_is_exact(call, expected):
+    assert expression(call) == literal(expected)
+
+
+def test_decimal_arithmetic_does_not_inherit_caller_precision():
+    from decimal import localcontext
+
+    with localcontext() as context:
+        context.prec = 2
+        assert expression("12345.67 + 0.01") == Literal(
+            "12345.68", datatype=XSD_NS + "decimal"
+        )
+        assert context.prec == 2
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "0.1e0 = 0.1",
+        "0.1e0 <= 0.1",
+        "false < true",
+        "true >= false",
+        '"2026-09-07T10:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> = "2026-09-07T12:00:00+02:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>',
+        '"2026-09-07T10:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> < "2026-09-07T12:01:00+02:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>',
+    ],
+)
+def test_typed_comparisons(call):
+    assert expression(call) == literal(True)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        'integer("1.9")',
+        'integer("1e2")',
+        'int("2147483648")',
+        'long("9223372036854775808")',
+        'dateTime("not-a-date")',
+        'dateTime("2026-02-30T12:00:00Z")',
+        'dateTime("2026-09-07 12:00:00")',
+        'date("2026-13-01")',
+        'time("25:00:00")',
+        'duration("bad")',
+        'dayTimeDuration("P1Y")',
+        'decimal("1e2")',
+    ],
+)
+def test_invalid_constructor_fails_per_solution(call):
+    from sparql_rl import infer
+
+    rules = (
+        "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> RULE { <urn:s> <urn:p> ?v } WHERE { SET(?v := xsd:"
+        + call
+        + ") }"
+    )
+    assert len(infer(rules)) == 0
+
+
+@pytest.mark.parametrize(
+    "call,expected",
+    [
+        ("integer(1.9)", "1"),
+        ("integer(true)", "1"),
+        ('int("-2147483648")', "-2147483648"),
+        ('long("9223372036854775807")', "9223372036854775807"),
+        ("boolean(0)", "false"),
+        ("boolean(1)", "true"),
+        ('boolean("1")', "true"),
+        ("decimal(1e2)", "100.0"),
+        ("decimal(true)", "1"),
+        ("double(2)", "2"),
+        ('dateTime("2026-09-07T24:00:00Z")', "2026-09-07T24:00:00Z"),
+        ('date("2026-09-07+02:00")', "2026-09-07+02:00"),
+        ('time("10:20:30.123Z")', "10:20:30.123Z"),
+        ('duration("P1Y2M3DT4H5M6.7S")', "P1Y2M3DT4H5M6.7S"),
+        ('dayTimeDuration("-P3DT1H")', "-P3DT1H"),
+    ],
+)
+def test_valid_constructor_values(call, expected):
+    name, arguments = call.split("(", 1)
+    result = expression(f"<{XSD_NS}{name}>({arguments}")
+    assert result == Literal(expected, datatype=XSD_NS + name)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "integer(<urn:x>)",
+        'integer("2"@en)',
+        'integer("2026-09-07"^^<http://www.w3.org/2001/XMLSchema#date>)',
+        'decimal("2026-09-07"^^<http://www.w3.org/2001/XMLSchema#date>)',
+        'decimal("NaN"^^<http://www.w3.org/2001/XMLSchema#double>)',
+        'boolean("2026-09-07"^^<http://www.w3.org/2001/XMLSchema#date>)',
+        "dateTime(1)",
+        "integer(1, 2)",
+    ],
+)
+def test_constructor_rejects_incompatible_source_types(call):
+    name, arguments = call.split("(", 1)
+    with pytest.raises(ExpressionError):
+        expression(f"<{XSD_NS}{name}>({arguments}")
