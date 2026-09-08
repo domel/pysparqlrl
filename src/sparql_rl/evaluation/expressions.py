@@ -39,6 +39,7 @@ from .datatypes import (
     promoted,
 )
 from .strings import compatible_strings, require_string_literal, require_xsd_string
+from .values import same_value
 
 
 class FunctionRegistry:
@@ -112,11 +113,7 @@ def equal(a: Node, b: Node) -> bool:
             return ebv(a) == ebv(b)
         if a.datatype == b.datatype == XSD_NS + "dateTime":
             return datetime_value(a.value) == datetime_value(b.value)
-        if a == b:
-            return True
-        if a.datatype not in (None, XSD_NS + "string") and a.datatype != b.datatype:
-            raise ExpressionError("incomparable literals")
-    return a == b
+    return same_value(a, b)
 
 
 def evaluate(
