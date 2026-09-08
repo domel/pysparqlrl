@@ -284,3 +284,29 @@ def test_constructor_rejects_incompatible_source_types(call):
     name, arguments = call.split("(", 1)
     with pytest.raises(ExpressionError):
         expression(f"<{XSD_NS}{name}>({arguments}")
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        '(1e308 * 1e308) = "INF"^^<http://www.w3.org/2001/XMLSchema#double>',
+        '<http://www.w3.org/2001/XMLSchema#double>("INF"^^<http://www.w3.org/2001/XMLSchema#float>) = "INF"^^<http://www.w3.org/2001/XMLSchema#double>',
+    ],
+)
+def test_nonfinite_numeric_results_can_be_used_again(call):
+    assert expression(call) == literal(True)
+
+
+@pytest.mark.parametrize(
+    "call,expected",
+    [
+        ("1.5e0 + 1", "2.5"),
+        ("1e308 * -1e308", "-INF"),
+        (
+            '"INF"^^<http://www.w3.org/2001/XMLSchema#double> - "INF"^^<http://www.w3.org/2001/XMLSchema#double>',
+            "NaN",
+        ),
+    ],
+)
+def test_floating_result_lexical_forms(call, expected):
+    assert expression(call) == Literal(expected, datatype=XSD_NS + "double")

@@ -31,6 +31,7 @@ from .datatypes import (
     boolean_value,
     cast_literal,
     datetime_value,
+    floating_lexical,
     number,
     promoted,
 )
@@ -68,7 +69,7 @@ def literal(value: object) -> Literal:
     if isinstance(value, int):
         return Literal(str(value), datatype=XSD_NS + "integer")
     if isinstance(value, float):
-        return Literal(str(value), datatype=XSD_NS + "double")
+        return Literal(floating_lexical(value), datatype=XSD_NS + "double")
     if isinstance(value, Decimal):
         return Literal(str(value), datatype=XSD_NS + "decimal")
     return Literal(str(value))

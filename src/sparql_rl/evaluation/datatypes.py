@@ -67,6 +67,14 @@ def promoted(a: Node, b: Node) -> tuple[int | Decimal | float, int | Decimal | f
     return x, y
 
 
+def floating_lexical(value: float) -> str:
+    if math.isnan(value):
+        return "NaN"
+    if math.isinf(value):
+        return "INF" if value > 0 else "-INF"
+    return str(value)
+
+
 def arithmetic(op: str, a: Node, b: Node) -> Literal:
     x, y = promoted(a, b)
     function = {
@@ -87,7 +95,7 @@ def arithmetic(op: str, a: Node, b: Node) -> Literal:
             )
             else "float"
         )
-        return Literal(str(result), datatype=XSD_NS + datatype)
+        return Literal(floating_lexical(result), datatype=XSD_NS + datatype)
     dx, dy = Decimal(x), Decimal(y)
     # Exact addition/subtraction/multiplication; division has at least 34 digits.
     precision = max(
@@ -179,7 +187,11 @@ def cast_literal(datatype: str, node: Node) -> Literal:
                     raise ExpressionError("non-finite decimal cast")
                 text = format(Decimal(str(numeric)), "f")
             else:
-                text = str(numeric)
+                text = (
+                    floating_lexical(numeric)
+                    if isinstance(numeric, float)
+                    else str(numeric)
+                )
         else:
             raise ExpressionError("invalid numeric cast")
         return Literal(text, datatype=datatype)
