@@ -67,7 +67,23 @@ class Literal:
 
     def __post_init__(self) -> None:
         if self.lang is not None:
+            if not self.lang:
+                raise ValueError("language tag must not be empty")
+            expected = (
+                RDF_DIR_LANG_STRING_IRI
+                if self.direction is not None
+                else RDF_LANG_STRING_IRI
+            )
+            if self.datatype not in (None, expected):
+                raise ValueError("language literal has incompatible datatype")
+            object.__setattr__(self, "datatype", None)
             object.__setattr__(self, "lang", self.lang.lower())
+        elif self.datatype in (RDF_LANG_STRING_IRI, RDF_DIR_LANG_STRING_IRI):
+            raise ValueError("language datatype requires a language tag")
+        if self.direction is not None and (
+            self.lang is None or self.direction not in ("ltr", "rtl")
+        ):
+            raise ValueError("invalid base direction")
         if self.datatype == XSD_NS + "string":
             object.__setattr__(self, "datatype", None)
 

@@ -109,7 +109,7 @@ def arithmetic(op: str, a: Node, b: Node) -> Literal:
         return Literal(str(function(dx, dy)), datatype=XSD_NS + "decimal")
 
 
-def datetime_value(text: str) -> tuple[datetime, Decimal]:
+def datetime_parts(text: str) -> tuple[datetime, Decimal]:
     if not re.fullmatch(rf"{DATE}T{TIME}{ZONE}", text):
         raise ExpressionError("invalid dateTime lexical form")
     fraction = re.search(r"\.[0-9]+", text)
@@ -120,6 +120,11 @@ def datetime_value(text: str) -> tuple[datetime, Decimal]:
     date = datetime.fromisoformat(whole)
     if midnight:
         date += timedelta(days=1)
+    return date, seconds
+
+
+def datetime_value(text: str) -> tuple[datetime, Decimal]:
+    date, seconds = datetime_parts(text)
     return date.replace(tzinfo=UTC) if date.tzinfo is None else date.astimezone(
         UTC
     ), seconds

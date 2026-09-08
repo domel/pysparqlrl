@@ -27,15 +27,18 @@ from sparql_rl.rdf.parser import (
 from sparql_rl.rdf.terms import make_triple_term
 
 from .datatypes import (
+    INTEGER_RANGES,
     NUMERIC,
     arithmetic,
     boolean_value,
     cast_literal,
+    datetime_parts,
     datetime_value,
     floating_lexical,
     number,
     promoted,
 )
+from .strings import compatible_strings, require_string_literal, require_xsd_string
 
 
 class FunctionRegistry:
@@ -85,18 +88,10 @@ def ebv(node: Node) -> bool:
         return node.value in {"true", "1"}
     if node.datatype in NUMERIC:
         value = number(node)
-        return not math.isnan(value) and value != 0
-    if node.datatype in (None, XSD_NS + "string") or node.lang:
+        return not (isinstance(value, float) and math.isnan(value)) and value != 0
+    if node.datatype in (None, XSD_NS + "string") and node.lang is None:
         return bool(node.value)
     raise ExpressionError("literal has no effective boolean value")
-
-
-def string(node: Node) -> str:
-    if not isinstance(node, Literal) or (
-        node.datatype not in (None, XSD_NS + "string") and not node.lang
-    ):
-        raise ExpressionError("string literal required")
-    return node.value
 
 
 def string_result(value: str, original: Node) -> Literal:
@@ -205,9 +200,9 @@ def _evaluate(
         if not values:
             return BNode(uuid4().hex)
         _, nodes = context.blank_nodes.setdefault(id(solution), (solution, {}))
-        return nodes.setdefault(string(values[0]), BNode(uuid4().hex))
+        return nodes.setdefault(require_xsd_string(values[0]), BNode(uuid4().hex))
     if op == "CONCAT":
-        joined = "".join(string(v) for v in values)
+        joined = "".join(require_string_literal(v) for v in values)
         if values and all(
             isinstance(v, Literal)
             and isinstance(values[0], Literal)
@@ -254,7 +249,7 @@ def _evaluate(
                 return literal(
                     compare(datetime_value(a.value), datetime_value(b.value))
                 )
-        return literal(compare(string(a), string(b)))
+        return literal(compare(require_xsd_string(a), require_xsd_string(b)))
     if op == "SAMETERM":
         return literal(a == values[1])
     tests = {
@@ -291,7 +286,7 @@ def _evaluate(
     if op in {"IRI", "URI"}:
         if isinstance(a, IRI):
             return a
-        iri_value = string(a)
+        iri_value = require_xsd_string(a)
         validate_iri(iri_value, require_absolute=False, allow_empty=True)
         if context.base_iri is not None:
             iri_value = resolve_iri_reference(context.base_iri, iri_value)
@@ -314,15 +309,16 @@ def _evaluate(
             )
         )
     if op in {"STRLANG", "STRLANGDIR"}:
-        return Literal(
-            string(a),
-            lang=string(values[1]).lower(),
-            direction=string(values[2]) if op == "STRLANGDIR" else None,
-        )
+        text = require_xsd_string(a)
+        lang = require_xsd_string(values[1]).lower()
+        direction = require_xsd_string(values[2]) if op == "STRLANGDIR" else None
+        if not lang or (direction is not None and direction not in {"ltr", "rtl"}):
+            raise ExpressionError("invalid language tag or base direction")
+        return Literal(text, lang=lang, direction=direction)
     if op == "STRDT":
         if not isinstance(values[1], IRI):
             raise ExpressionError("datatype must be an IRI")
-        return Literal(string(a), datatype=values[1].value)
+        return Literal(require_xsd_string(a), datatype=values[1].value)
     if op in {"ABS", "CEIL", "FLOOR", "ROUND"}:
         value = number(a)
         rounded = (
@@ -339,9 +335,9 @@ def _evaluate(
         assert isinstance(a, Literal)
         return Literal(str(rounded), datatype=a.datatype)
     if op in {"YEAR", "MONTH", "DAY", "HOURS", "MINUTES", "SECONDS", "TIMEZONE", "TZ"}:
-        if not isinstance(a, Literal):
-            raise ExpressionError("date/time literal required")
-        date = datetime.fromisoformat(a.value)
+        if not isinstance(a, Literal) or a.datatype != XSD_NS + "dateTime":
+            raise ExpressionError("xsd:dateTime required")
+        date, fraction = datetime_parts(a.value.strip())
         offset = date.utcoffset()
         if op == "TZ":
             return Literal(
@@ -368,11 +364,10 @@ def _evaluate(
                 "DAY": date.day,
                 "HOURS": date.hour,
                 "MINUTES": date.minute,
-                "SECONDS": Decimal(date.second)
-                + Decimal(date.microsecond) / Decimal(1000000),
+                "SECONDS": Decimal(str(date.second) + format(fraction, "f")[1:]),
             }[op]
         )
-    text = string(a)
+    text = require_string_literal(a)
     if op == "STRLEN":
         return literal(len(text))
     if op in {"UCASE", "LCASE"}:
@@ -380,15 +375,23 @@ def _evaluate(
     if op == "ENCODE_FOR_URI":
         return Literal(quote(text, safe="-._~"))
     if op == "SUBSTR":
-        start = math.floor(float(number(values[1])) + 0.5) - 1
-        end = (
-            start + math.floor(float(number(values[2])) + 0.5)
-            if len(values) == 3
-            else len(text)
-        )
+
+        def position(node: Node) -> int:
+            if not isinstance(node, Literal) or node.datatype not in {
+                XSD_NS + t for t in INTEGER_RANGES
+            }:
+                raise ExpressionError("substring positions require an integer datatype")
+            return int(number(node))
+
+        start = position(values[1]) - 1
+        end = start + position(values[2]) if len(values) == 3 else len(text)
         return string_result(text[max(0, start) : max(0, end)], a)
-    other = string(values[1])
+    if op in {"CONTAINS", "STRSTARTS", "STRENDS", "STRBEFORE", "STRAFTER"}:
+        text, other = compatible_strings(a, values[1])
+    else:
+        other = require_xsd_string(values[1])
     if op == "LANGMATCHES":
+        text = require_xsd_string(a)
         return literal(
             bool(text)
             if other == "*"
@@ -409,7 +412,9 @@ def _evaluate(
         return string_result(text.partition(other)[0 if op == "STRBEFORE" else 2], a)
     if op in {"REGEX", "REPLACE"}:
         flags_index = 2 if op == "REGEX" else 3
-        flags_text = string(values[flags_index]) if len(values) > flags_index else ""
+        flags_text = (
+            require_xsd_string(values[flags_index]) if len(values) > flags_index else ""
+        )
         flags = sum(
             {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL, "x": re.VERBOSE}[f]
             for f in set(flags_text)
@@ -418,7 +423,7 @@ def _evaluate(
             return literal(
                 safe_regex.search(other, text, flags, timeout=0.1) is not None
             )
-        replacement = re.sub(r"\$(\d+)", r"\\g<\1>", string(values[2]))
+        replacement = re.sub(r"\$(\d+)", r"\\g<\1>", require_xsd_string(values[2]))
         return string_result(
             safe_regex.sub(other, replacement, text, flags=flags, timeout=0.1), a
         )
