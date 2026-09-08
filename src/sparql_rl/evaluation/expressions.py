@@ -36,7 +36,9 @@ from .datatypes import (
     datetime_value,
     floating_lexical,
     number,
+    numeric_function,
     promoted,
+    unary_numeric,
 )
 from .strings import compatible_strings, require_string_literal, require_xsd_string
 from .values import same_value
@@ -219,12 +221,7 @@ def _evaluate(
     if op == "unary!":
         return literal(not ebv(a))
     if op in {"unary+", "unary-"}:
-        numeric = number(a)
-        if op == "unary-":
-            numeric = (
-                numeric.copy_negate() if isinstance(numeric, Decimal) else -numeric
-            )
-        return literal(numeric)
+        return unary_numeric(op, a)
     if op in {"+", "-", "*", "/"}:
         return arithmetic(op, a, values[1])
     if op in {"=", "!="}:
@@ -317,20 +314,7 @@ def _evaluate(
             raise ExpressionError("datatype must be an IRI")
         return Literal(require_xsd_string(a), datatype=values[1].value)
     if op in {"ABS", "CEIL", "FLOOR", "ROUND"}:
-        value = number(a)
-        rounded = (
-            abs(value)
-            if op == "ABS"
-            else math.ceil(value)
-            if op == "CEIL"
-            else math.floor(value)
-            if op == "FLOOR"
-            else math.floor(
-                value + Decimal("0.5") if isinstance(value, Decimal) else value + 0.5
-            )
-        )
-        assert isinstance(a, Literal)
-        return Literal(str(rounded), datatype=a.datatype)
+        return numeric_function(op, a)
     if op in {"YEAR", "MONTH", "DAY", "HOURS", "MINUTES", "SECONDS", "TIMEZONE", "TZ"}:
         if not isinstance(a, Literal) or a.datatype != XSD_NS + "dateTime":
             raise ExpressionError("xsd:dateTime required")

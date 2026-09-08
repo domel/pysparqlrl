@@ -3,8 +3,17 @@
 import math
 import operator
 import re
+import struct
 from datetime import UTC, datetime, timedelta
-from decimal import Context, Decimal, localcontext
+from decimal import (
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_DOWN,
+    ROUND_HALF_UP,
+    Context,
+    Decimal,
+    localcontext,
+)
 
 from sparql_rl.errors import ExpressionError
 from sparql_rl.rdf.parser import IRI, XSD_NS, Literal, Node
@@ -57,14 +66,86 @@ def number(node: Node) -> int | Decimal | float:
         rf"(?:{DECIMAL_PATTERN}(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)", text
     ):
         raise ExpressionError("invalid floating point lexical form")
-    return float(text)
+    return binary32(float(text)) if name == "float" else float(text)
 
 
 def promoted(a: Node, b: Node) -> tuple[int | Decimal | float, int | Decimal | float]:
     x, y = number(a), number(b)
     if isinstance(x, float) or isinstance(y, float):
-        return float(x), float(y)
+        double = any(
+            isinstance(v, Literal) and v.datatype == XSD_NS + "double" for v in (a, b)
+        )
+        return (
+            (as_float(x), as_float(y))
+            if double
+            else (binary32(as_float(x)), binary32(as_float(y)))
+        )
     return x, y
+
+
+def as_float(value: Decimal | float) -> float:
+    try:
+        return float(value)
+    except OverflowError:
+        return -math.inf if value < 0 else math.inf
+
+
+def binary32(value: float) -> float:
+    try:
+        return struct.unpack("!f", struct.pack("!f", value))[0]
+    except OverflowError:
+        return math.copysign(math.inf, value)
+
+
+def numeric_result(value: Decimal | float, datatype: str) -> Literal:
+    if datatype in (XSD_NS + "float", XSD_NS + "double"):
+        floating = as_float(value)
+        if datatype == XSD_NS + "float":
+            floating = binary32(floating)
+        return Literal(floating_lexical(floating), datatype=datatype)
+    return Literal(str(value), datatype=datatype)
+
+
+def unary_numeric(op: str, node: Node) -> Literal:
+    n = number(node)
+    assert isinstance(node, Literal) and node.datatype is not None
+    if op == "unary-":
+        n = n.copy_negate() if isinstance(n, Decimal) else -n
+    datatype = (
+        XSD_NS + "integer"
+        if node.datatype[len(XSD_NS) :] in INTEGER_RANGES
+        else node.datatype
+    )
+    return numeric_result(n, datatype)
+
+
+def numeric_function(op: str, node: Node) -> Literal:
+    n = number(node)
+    assert isinstance(node, Literal) and node.datatype is not None
+    if op == "ABS":
+        result = n.copy_abs() if isinstance(n, Decimal) else abs(n)
+    elif isinstance(n, float):
+        if not math.isfinite(n) or n == 0:
+            result = n
+        else:
+            rounded = math.ceil(n) if op == "CEIL" else math.floor(n)
+            if op == "ROUND" and n - rounded >= 0.5:
+                rounded += 1
+            result = math.copysign(0.0, n) if rounded == 0 else float(rounded)
+    elif isinstance(n, Decimal):
+        rounding = (
+            ROUND_CEILING
+            if op == "CEIL"
+            else ROUND_FLOOR
+            if op == "FLOOR"
+            else ROUND_HALF_DOWN
+            if n < 0
+            else ROUND_HALF_UP
+        )
+        result = n.to_integral_value(rounding=rounding)
+    else:
+        result = n
+    return numeric_result(result, node.datatype)
 
 
 def floating_lexical(value: float) -> str:
@@ -86,7 +167,16 @@ def arithmetic(op: str, a: Node, b: Node) -> Literal:
     if isinstance(x, int) and isinstance(y, int) and op != "/":
         return Literal(str(function(x, y)), datatype=XSD_NS + "integer")
     if isinstance(x, float) or isinstance(y, float):
-        result = function(float(x), float(y))
+        if op == "/" and y == 0:
+            result = (
+                math.nan
+                if x == 0 or math.isnan(x)
+                else math.copysign(
+                    math.inf, math.copysign(1.0, x) * math.copysign(1.0, y)
+                )
+            )
+        else:
+            result = function(float(x), float(y))
         datatype = (
             "double"
             if any(
@@ -95,7 +185,7 @@ def arithmetic(op: str, a: Node, b: Node) -> Literal:
             )
             else "float"
         )
-        return Literal(floating_lexical(result), datatype=XSD_NS + datatype)
+        return numeric_result(result, XSD_NS + datatype)
     dx, dy = Decimal(x), Decimal(y)
     # Exact addition/subtraction/multiplication; division has at least 34 digits.
     precision = max(
@@ -199,6 +289,8 @@ def cast_literal(datatype: str, node: Node) -> Literal:
                 )
         else:
             raise ExpressionError("invalid numeric cast")
+        if name == "float":
+            return numeric_result(number(Literal(text, datatype=datatype)), datatype)
         return Literal(text, datatype=datatype)
     if name == "boolean":
         if from_string or source == XSD_NS + "boolean":
