@@ -26,6 +26,7 @@ from sparql_rl.rdf.parser import (
 )
 from sparql_rl.rdf.terms import make_triple_term
 
+from . import xpath_regex
 from .datatypes import (
     INTEGER_RANGES,
     NUMERIC,
@@ -396,16 +397,10 @@ def _evaluate(
         flags_text = (
             require_xsd_string(values[flags_index]) if len(values) > flags_index else ""
         )
-        flags = sum(
-            {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL, "x": re.VERBOSE}[f]
-            for f in set(flags_text)
-        )
         if op == "REGEX":
-            return literal(
-                safe_regex.search(other, text, flags, timeout=0.1) is not None
-            )
-        replacement = re.sub(r"\$(\d+)", r"\\g<\1>", require_xsd_string(values[2]))
+            return literal(xpath_regex.matches(text, other, flags_text))
         return string_result(
-            safe_regex.sub(other, replacement, text, flags=flags, timeout=0.1), a
+            xpath_regex.replace(text, other, require_xsd_string(values[2]), flags_text),
+            a,
         )
     raise ExpressionError(f"unknown function: {op}")

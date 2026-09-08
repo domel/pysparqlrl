@@ -7,7 +7,7 @@ name = "sparql-rl"
 version = "0.1.0"
 description = "Standalone SPARQL 1.2 RL processor"
 requires-python = ">=3.11"
-dependencies = ["rdflib>=7.1", "regex>=2024.11.6"]
+dependencies = ["rdflib>=7.1", "regex>=2024.11.6", "elementpath>=5.1.4,<6"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "types-regex"]
