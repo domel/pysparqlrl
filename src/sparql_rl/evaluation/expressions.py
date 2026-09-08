@@ -24,6 +24,7 @@ from sparql_rl.rdf.parser import (
     resolve_iri_reference,
     validate_iri,
 )
+from sparql_rl.rdf.terms import make_triple_term
 
 from .datatypes import (
     NUMERIC,
@@ -152,7 +153,7 @@ def _evaluate(
         predicate = evaluate(expr.predicate, solution, context)
         if not isinstance(predicate, IRI):
             raise ExpressionError("triple predicate must be an IRI")
-        return TripleTerm(
+        return make_triple_term(
             evaluate(expr.subject, solution, context),
             predicate,
             evaluate(expr.object, solution, context),
@@ -278,7 +279,7 @@ def _evaluate(
     if op == "TRIPLE":
         if not isinstance(values[1], IRI):
             raise ExpressionError("invalid triple term")
-        return TripleTerm(a, values[1], values[2])
+        return make_triple_term(a, values[1], values[2])
     if op in {"SUBJECT", "PREDICATE", "OBJECT"}:
         if not isinstance(a, TripleTerm):
             raise ExpressionError("triple term required")

@@ -64,3 +64,14 @@ global decimal context. DateTime comparisons normalize explicit offsets and
 retain fractional-second precision; UTC is the implicit timezone for values
 without an offset. Temporal constructors currently accept strings or values of
 the same datatype, within Python's supported calendar range.
+
+## Concrete RDF boundary
+
+Rule patterns and templates retain symmetric syntax, while `Graph` accepts only
+concrete RDF triples (IRI/blank subject, IRI predicate, recursively valid RDF
+objects). Invalid instantiated head triples are omitted; invalid RDF input is
+rejected. `TRIPLE` and triple-term expressions report expression errors for
+invalid triples. This follows RDF 1.2 Concepts section 3 and SPARQL-RL's definition
+of generation in section 4.3. The older symmetric-head and symmetric-DATA tests
+incorrectly treated broad syntax as permission to output non-RDF graphs; their
+expectations have been corrected without restricting syntax-only parsing.

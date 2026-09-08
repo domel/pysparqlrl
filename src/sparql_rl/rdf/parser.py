@@ -1313,8 +1313,8 @@ class TurtleParser(BaseParser):
     def parse_rt_subject(self) -> Node:
         """Parse reified-triple subject from the current input and return the result."""
         if self.scanner.startswith("<<") and not self.scanner.startswith("<<("):
-            _, term = self.parse_reified_triple(needs_subject_reference=False)
-            return term
+            reifier, _ = self.parse_reified_triple(needs_subject_reference=False)
+            return reifier
         if self.scanner.peek() == "[":
             return self.parse_rt_empty_blank_node()
         if self.scanner.startswith("_:"):

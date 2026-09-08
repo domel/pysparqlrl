@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from sparql_rl.rdf.parser import IRI, BNode, Node, Triple, TripleTerm
 
+TriplePattern = Triple
+TripleTemplate = Triple
+
 
 @dataclass(frozen=True)
 class Variable(IRI):
@@ -18,7 +21,7 @@ class Expression:
 
 @dataclass(frozen=True)
 class TriplePatternElement:
-    pattern: Triple
+    pattern: TriplePattern
 
 
 @dataclass(frozen=True)
@@ -43,7 +46,7 @@ RuleElement = TriplePatternElement | FilterElement | AssignmentElement | Negatio
 
 @dataclass(frozen=True)
 class Rule:
-    head: tuple[Triple, ...]
+    head: tuple[TripleTemplate, ...]
     body: tuple[RuleElement, ...]
     data_only: bool = False
     identifier: IRI | None = None

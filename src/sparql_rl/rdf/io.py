@@ -21,15 +21,16 @@ from .parser import (
     TurtleParser,
     serialize_ntriples,
 )
+from .terms import RDFTriple, is_rdf_triple
 
 
 class Graph:
     def __init__(self, triples: Iterable[Triple] = ()):
-        self._triples: dict[Triple, None] = {}
+        self._triples: dict[RDFTriple, None] = {}
         self._indexes: tuple[dict[Node, dict[Triple, None]], ...] = ({}, {}, {})
         self.update(triples)
 
-    def __iter__(self) -> Iterator[Triple]:
+    def __iter__(self) -> Iterator[RDFTriple]:
         return iter(self._triples)
 
     def __len__(self) -> int:
@@ -39,6 +40,10 @@ class Graph:
         return triple in self._triples
 
     def add(self, triple: Triple) -> None:
+        if not is_rdf_triple(triple):
+            raise RDFInputError(
+                "invalid RDF triple: subject must be an IRI or blank node, predicate an IRI"
+            )
         if triple in self._triples:
             return
         self._triples[triple] = None

@@ -15,6 +15,7 @@ from sparql_rl.model import (
 )
 from sparql_rl.rdf.io import Graph, merge_graphs
 from sparql_rl.rdf.parser import IRI, BNode, Node, TripleTerm
+from sparql_rl.rdf.terms import is_rdf_triple, make_triple_term
 
 from .expressions import Context, ebv, evaluate
 from .matcher import SolutionMapping, graph_match
@@ -80,15 +81,16 @@ def evaluate_rule(
                 )
                 if not isinstance(p, IRI):
                     raise ExpressionError("invalid instantiated triple term")
-                return TripleTerm(s, p, o)
+                return make_triple_term(s, p, o)
             return term
 
         for head in rule.head:
             try:
                 s, p, o = (substitute(t) for t in head)
-                if isinstance(p, IRI):
-                    output.add((s, p, o))
-            except ExpressionError:
+                triple = (s, p, o)
+                if is_rdf_triple(triple):
+                    output.add(triple)
+            except (ExpressionError, ValueError):
                 continue
     return output
 

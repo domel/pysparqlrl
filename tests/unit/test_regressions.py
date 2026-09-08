@@ -15,8 +15,8 @@ def test_builtin_arity_is_syntax_error(call):
 
 def test_symmetric_head_instantiation():
     result = infer("RULE {1 <urn:p> 2} WHERE {}")
-    assert len(result) == 1
-    assert next(iter(result))[0] == Literal("1", datatype=XSD_NS + "integer")
+    assert len(result) == 0
+    assert len(parse_rules("RULE {1 <urn:p> 2} WHERE {}").rules[0].head) == 1
 
 
 def test_triple_expression_substitution():
