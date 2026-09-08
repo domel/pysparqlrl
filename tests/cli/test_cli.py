@@ -220,3 +220,27 @@ def test_rules_base_does_not_change_import_identity(tmp_path, capsys):
         main(["infer", "-r", str(source), "--rules-base", "http://example/base/"]) == 0
     )
     assert len(parse_data(capsys.readouterr().out)) == 1
+
+
+def test_malformed_rdfxml_has_rdf_input_exit_code():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "sparql_rl",
+            "infer",
+            "-R",
+            "DATA {}",
+            "-D",
+            "<broken",
+            "--data-string-format",
+            "rdfxml",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 7
+    assert "RDF input error" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not result.stdout

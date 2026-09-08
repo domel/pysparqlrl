@@ -15,6 +15,10 @@ class ImportResolutionError(ValueError):
     pass
 
 
+class RDFInputError(ValueError):
+    pass
+
+
 class ExpressionError(ValueError):
     pass
 
@@ -23,6 +27,7 @@ __all__ = [
     "ExpressionError",
     "ImportResolutionError",
     "ParseError",
+    "RDFInputError",
     "StratificationError",
     "WellFormednessError",
 ]

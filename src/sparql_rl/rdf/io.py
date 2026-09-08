@@ -3,9 +3,13 @@
 import json
 from collections.abc import Iterable, Iterator
 from uuid import uuid4
+from xml.sax import SAXParseException
 
 import rdflib
 
+from sparql_rl.errors import RDFInputError
+
+from .adapters import parse_rdflib
 from .parser import (
     IRI,
     BNode,
@@ -88,6 +92,26 @@ def parse_data(
     source_name: str = "<data>",
     dataset_policy: str = "error",
 ) -> Graph:
+    try:
+        return _parse_data(
+            text,
+            format=format,
+            base_iri=base_iri,
+            source_name=source_name,
+            dataset_policy=dataset_policy,
+        )
+    except (SAXParseException, rdflib.exceptions.ParserError, SyntaxError) as error:
+        raise RDFInputError(f"{source_name}: {error}") from error
+
+
+def _parse_data(
+    text: str,
+    *,
+    format: str = "turtle",
+    base_iri: str | None = None,
+    source_name: str = "<data>",
+    dataset_policy: str = "error",
+) -> Graph:
     if format in {"turtle", "ttl"}:
         return Graph(TurtleParser(text, source_name, base_iri).parse())
     if format in {"nt", "ntriples"}:
@@ -131,8 +155,8 @@ def parse_data(
     if format in {"trig", "nquads", "nq"}:
         if dataset_policy not in {"error", "union"}:
             raise ValueError("dataset policy must be error or union")
-        dataset = rdflib.Dataset()
-        dataset.parse(data=text, format=formats[format], publicID=base_iri)
+        dataset = parse_rdflib(text, formats[format], base_iri)
+        assert isinstance(dataset, rdflib.Dataset)
         named = [
             g
             for g in dataset.graphs()
@@ -144,9 +168,7 @@ def parse_data(
         for graph in dataset.graphs():
             result.update(as_graph(graph))
         return result
-    return as_graph(
-        rdflib.Graph().parse(data=text, format=formats[format], publicID=base_iri)
-    )
+    return as_graph(parse_rdflib(text, formats[format], base_iri))
 
 
 def adapt_node(node: rdflib.term.Node) -> Node:

@@ -244,6 +244,8 @@ def execute(args: argparse.Namespace) -> tuple[str, int]:
     try:
         data = read_data(args)
     except (ValueError, OSError) as error:
+        if args.debug:
+            raise
         print(f"RDF input error: {error}", file=sys.stderr)
         return "", 7
     if args.command == "infer":
