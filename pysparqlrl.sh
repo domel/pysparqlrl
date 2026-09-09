@@ -10,7 +10,7 @@ if [[ -z "$pysparqlrl_python" && -x "$pysparqlrl_root/.venv/bin/python" ]]; then
 fi
 
 if [[ -z "$pysparqlrl_python" ]]; then
-    for pysparqlrl_candidate in python3.13 python3.12 python3.11 python3; do
+    for pysparqlrl_candidate in python python3 python3.13 python3.12 python3.11; do
         if command -v "$pysparqlrl_candidate" >/dev/null 2>&1 &&
             "$pysparqlrl_candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then
             pysparqlrl_python="$pysparqlrl_candidate"

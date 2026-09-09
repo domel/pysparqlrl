@@ -250,3 +250,37 @@ def test_malformed_rdfxml_has_rdf_input_exit_code():
     assert "RDF input error" in result.stderr
     assert "Traceback" not in result.stderr
     assert not result.stdout
+
+
+@pytest.mark.parametrize("active_name", ["python", "python3"])
+def test_bash_launcher_prefers_active_path_python(tmp_path, active_name):
+    import os
+    import shlex
+    import shutil
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    shutil.copy2(root / "pysparqlrl.sh", checkout / "pysparqlrl.sh")
+    (checkout / "src").symlink_to(root / "src", target_is_directory=True)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    active = binaries / active_name
+    active.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n')
+    active.chmod(0o755)
+    newer = binaries / "python3.13"
+    newer.write_text('#!/bin/sh\n[ "$1" = "-c" ] && exit 0\nexit 73\n')
+    newer.chmod(0o755)
+    env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.defpath)
+    env.pop("PYSPARQLRL_PYTHON", None)
+    result = subprocess.run(
+        [str(checkout / "pysparqlrl.sh"), "infer", "-R", RULES, "-D", DATA],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(parse_data(result.stdout)) == 1
