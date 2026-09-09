@@ -36,6 +36,26 @@ def infer(
     function_registry: FunctionRegistry | None = None,
     import_resolver: ImportResolver | None = None,
 ) -> Graph:
+    base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
+    result = _evaluate_input(
+        rule_set,
+        base,
+        Context(functions=function_registry or FunctionRegistry()),
+        rule_base_iri,
+        import_resolver,
+    )
+    if include_base:
+        result.update(base)
+    return result
+
+
+def _evaluate_input(
+    rule_set: RuleSet | PreparedRuleSet | str,
+    base: Graph,
+    context: Context,
+    rule_base_iri: str | None,
+    import_resolver: ImportResolver | None,
+) -> Graph:
     if isinstance(rule_set, str):
         rule_set = parse_rules(rule_set, base_iri=rule_base_iri)
     prepared = (
@@ -43,13 +63,7 @@ def infer(
         if isinstance(rule_set, PreparedRuleSet)
         else prepare_rules(rule_set, import_resolver=import_resolver)
     )
-    base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
-    result = evaluate_rules(
-        prepared, base, Context(functions=function_registry or FunctionRegistry())
-    )
-    if include_base:
-        result.update(base)
-    return result
+    return evaluate_rules(prepared, base, context)
 
 
 @dataclass(frozen=True)
@@ -72,15 +86,15 @@ def query(
     *,
     rule_base_iri: str | None = None,
     goal_base_iri: str | None = None,
+    data_format: str | None = None,
+    data_base_iri: str | None = None,
+    function_registry: FunctionRegistry | None = None,
     import_resolver: ImportResolver | None = None,
 ) -> QueryResult:
-    graph = infer(
-        rule_set,
-        data,
-        rule_base_iri=rule_base_iri,
-        include_base=True,
-        import_resolver=import_resolver,
-    )
+    base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
+    context = Context(functions=function_registry or FunctionRegistry())
+    graph = _evaluate_input(rule_set, base, context, rule_base_iri, import_resolver)
+    graph.update(base)
     base_iri = goal_base_iri
     if isinstance(goal, str):
         parser = RuleParser(goal, "<goal>", goal_base_iri)
@@ -94,9 +108,7 @@ def query(
     else:
         body = goal
     defined = validate_body(body, set())
-    solutions = evaluate_body(
-        body, graph, as_graph(data), [{}], Context(base_iri=base_iri)
-    )
+    solutions = evaluate_body(body, graph, base, [{}], context.for_rule(base_iri))
     public = tuple(
         sorted(
             (v for v in defined if not v.value.startswith("@")), key=lambda v: v.value
