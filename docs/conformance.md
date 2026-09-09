@@ -44,8 +44,11 @@ This is a tested reference implementation, not a certification of complete
 Working Draft conformance. The official SPARQL-RL suite exercises only part of
 the expression space. The following areas need further conformance expansion:
 
-- Complete XPath/XSD edge semantics for datatype casts, dates outside Python's
-  datetime range, string compatibility, and the XPath regular-expression dialect.
+- Complete XPath/XSD edge semantics for datatype casts and dates outside Python's
+  datetime range. Nonidentical values of temporal datatypes other than
+  `xsd:dateTime` do not yet have value equality support.
+- Broader XPath regular-expression conformance, including Unicode-version
+  differences between the syntax translator and matching engine.
 - RDF 1.2 coverage for RDFLib-backed JSON-LD, RDF/XML, TriG, and N-Quads adapters;
   Turtle/N-Triples use the independent RDF 1.2 parser.
 - Rule-set evaluation uses an indexed reference fixpoint algorithm, without
@@ -64,6 +67,18 @@ global decimal context. DateTime comparisons normalize explicit offsets and
 retain fractional-second precision; UTC is the implicit timezone for values
 without an offset. Temporal constructors currently accept strings or values of
 the same datatype, within Python's supported calendar range.
+
+Floating-point values use IEEE binary32 for `xsd:float` and binary64 for
+`xsd:double`, with type promotion, signed zero, infinities, and NaN handling.
+Local regression tests cover function argument types, the SPARQL 1.2 string
+compatibility table, and recursive triple-term `sameValue` separately from
+`sameTerm`. These tests supplement the pinned W3C manifests.
+
+XPath regex patterns are translated with `elementpath.regex` and executed by
+`regex` with a matching timeout. Supported flags are `s`, `m`, `i`, `x`, and `q`;
+replacement processing follows XPath group-reference and escape rules and
+rejects patterns matching the empty string. No XPath expression evaluator is
+used. Both packages are installed as normal runtime dependencies.
 
 ## Concrete RDF boundary
 

@@ -28,19 +28,26 @@ This report, README, examples, and CI configuration complete the documentation c
 
 ## Verification
 
-- `ruff check .`: passed.
-- `ruff format --check .`: passed; 44 Python files.
-- `mypy src/sparql_rl`: passed; 22 source modules.
-- `pytest`: 898 passed.
-- `pytest -m w3c`: 721 passed (203 SPARQL-RL, 518 RDF).
-- `pytest --cov=sparql_rl --cov-report=term-missing`: 94% overall; expression evaluation 95%, rule engine 96%, matcher 100%.
-- `bash -n pysparqlrl.sh`: passed; launcher tested from another directory.
-- `uv build`: source distribution and wheel built.
-- Wheel installed in a separate environment; isolated API inference and installed CLI version check passed.
-- RDFLib emitted five deprecation warnings; no tests were skipped because of these warnings.
+The commit table above records the initial implementation milestones. Current
+verification results are produced by the [quality workflow](../.github/workflows/ci.yml)
+for each supported Python version. Its artifacts contain JUnit test results and
+an XML coverage report; this document does not maintain changing test or source
+file counts by hand.
 
-SPARQL-RL categories: syntax 139/139; wellformed 8/8; stratification 10/10; eval 35/35; eval2 6/6; examples 5/5.
+Reproduce the quality gate after installing the project with development extras:
 
-New commits use `domel <ddooss@wp.pl>`. No changes were pushed. The pre-existing untracked `AGENTS.md` and `spec.md` were preserved and were not included in implementation commits.
+```bash
+python -m pip install -e '.[dev]'
+ruff check .
+ruff format --check .
+mypy src/sparql_rl
+pytest
+pytest -m w3c
+pytest --cov=sparql_rl --cov-report=term-missing --cov-fail-under=90
+bash -n pysparqlrl.sh
+```
 
-This checkpoint does not claim that every untested XPath/XSD edge case or Working Draft semantic requirement is fully covered. See the conformance notes for known limits.
+The pinned suite revisions, category coverage, semantic corrections, and known
+limitations are recorded in [conformance notes](conformance.md). Passing the
+manifests does not establish complete coverage of every Working Draft or
+XPath/XSD requirement.

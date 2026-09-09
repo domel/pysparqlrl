@@ -15,6 +15,13 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy src/sparql_rl
-      - run: pytest
+      - run: pytest --junitxml=test-results.xml
       - run: pytest -m w3c
-      - run: pytest --cov=sparql_rl --cov-report=term-missing --cov-fail-under=90
+      - run: pytest --cov=sparql_rl --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-python-${{ matrix.python }}
+          path: |
+            test-results.xml
+            coverage.xml

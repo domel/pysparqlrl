@@ -63,6 +63,10 @@ Use `data_format` and `data_base_iri` for other string inputs. The returned grap
 contains inferred triples, including rule-set `DATA`, excluding existing base
 triples. `include_base=True` returns their union. Caller graphs are not mutated.
 
+`query` accepts the same rule and data inputs, including `data_format`,
+`data_base_iri`, and `function_registry`. It parses the base data once and shares
+the function registry and `NOW()` value between inference and goal evaluation.
+
 RDF 1.2 terms use the exported `IRI`, `BNode`, `Literal`, and `TripleTerm` types.
 `Graph` supports iteration, membership, `add`, `update`, indexed `triples`, and
 `serialize`. Use `sparql_rl.rdf.io.parse_data` for explicit RDF input and
