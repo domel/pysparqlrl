@@ -272,7 +272,11 @@ def test_bash_launcher_prefers_active_path_python(tmp_path, active_name):
     newer = binaries / "python3.13"
     newer.write_text('#!/bin/sh\n[ "$1" = "-c" ] && exit 0\nexit 73\n')
     newer.chmod(0o755)
-    env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.defpath)
+    for command in ("bash", "dirname"):
+        executable = shutil.which(command)
+        assert executable is not None
+        (binaries / command).symlink_to(executable)
+    env = dict(os.environ, PATH=str(binaries))
     env.pop("PYSPARQLRL_PYTHON", None)
     result = subprocess.run(
         [str(checkout / "pysparqlrl.sh"), "infer", "-R", RULES, "-D", DATA],
