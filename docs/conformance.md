@@ -16,6 +16,10 @@ cases. Canonical N-Triples serialization tests are outside the API's scope;
 their fixtures are retained but the runner explicitly excludes the C14N test type.
 Graphs are compared by isomorphism, not serialization or generated blank-node names.
 
+Vendored fixtures omit duplicate test-suite archives and historical reports from
+other implementations. All manifest entries and their input/expected-result files
+are retained.
+
 Official tests retain their original notices and are distributed under the
 [W3C Test Suite License](https://www.w3.org/Consortium/Legal/2008/04-testsuite-license)
 and [W3C three-clause BSD license](https://www.w3.org/Consortium/Legal/2008/03-bsd-license).
