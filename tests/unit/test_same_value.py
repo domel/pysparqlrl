@@ -14,6 +14,14 @@ def value(text):
     [
         ("<<( <urn:s> <urn:p> 123 )>> = <<( <urn:s> <urn:p> 123.0 )>>", "true"),
         (
+            '<<( <urn:s> <urn:p> true )>> = <<( <urn:s> <urn:p> "1"^^<http://www.w3.org/2001/XMLSchema#boolean> )>>',
+            "true",
+        ),
+        (
+            '<<( <urn:s> <urn:p> "2026-09-09T01:00:00+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime> )>> = <<( <urn:s> <urn:p> "2026-09-09T00:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> )>>',
+            "true",
+        ),
+        (
             "sameTerm(<<( <urn:s> <urn:p> 123 )>>, <<( <urn:s> <urn:p> 123.0 )>>)",
             "false",
         ),
@@ -48,6 +56,7 @@ def test_same_value_and_same_term_are_distinct(text, expected):
             '<<( <urn:b> <urn:q> "b"^^<urn:unknown> )>>',
         ),
         ('"bad"^^<http://www.w3.org/2001/XMLSchema#integer>', '"bad"'),
+        ('"invalid"^^<http://www.w3.org/2001/XMLSchema#date>', '"invalid"'),
     ],
 )
 def test_same_value_errors_are_symmetric(a, b):
