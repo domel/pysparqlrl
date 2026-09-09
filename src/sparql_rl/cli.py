@@ -16,7 +16,7 @@ from sparql_rl.errors import (
 )
 from sparql_rl.imports import ImportResolver
 from sparql_rl.model import RuleSet, is_run_once
-from sparql_rl.rdf.io import Graph, merge_graphs, parse_data
+from sparql_rl.rdf.io import Graph, merge_graphs, merge_triples, parse_data
 from sparql_rl.rdf.parser import IRI, BNode, Node, TripleTerm, format_node_nt
 from sparql_rl.spec_version import SPEC_DATE, __version__
 
@@ -115,7 +115,7 @@ def read_rules(args: argparse.Namespace) -> RuleSet:
     inputs.extend(parse_rules(t, base_iri=args.rules_base) for t in args.rules_string)
     return RuleSet(
         tuple(r for rs in inputs for r in rs.rules),
-        tuple(merge_graphs(Graph(rs.data) for rs in inputs)),
+        tuple(merge_triples(rs.data for rs in inputs)),
         tuple(i for rs in inputs for i in rs.imports),
         source_iris=tuple(rs.source for rs in inputs if rs.source),
     )

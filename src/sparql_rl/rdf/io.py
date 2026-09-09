@@ -211,8 +211,12 @@ def as_graph(
 
 
 def merge_graphs(graphs: Iterable[Graph]) -> Graph:
-    result = Graph()
-    for graph in graphs:
+    return Graph(merge_triples(graphs))
+
+
+def merge_triples(sources: Iterable[Iterable[Triple]]) -> Iterator[Triple]:
+    """Standardize blank nodes apart without imposing concrete graph semantics."""
+    for graph in sources:
         scope = uuid4().hex
 
         def rename(node: Node, scope: str = scope) -> Node:
@@ -224,8 +228,7 @@ def merge_graphs(graphs: Iterable[Graph]) -> Graph:
                 )
             return node
 
-        result.update((rename(s), p, rename(o)) for s, p, o in graph)
-    return result
+        yield from ((rename(s), p, rename(o)) for s, p, o in graph)
 
 
 def to_rdflib(node: Node) -> rdflib.term.Identifier:

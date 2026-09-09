@@ -13,6 +13,12 @@ RULES = "RULE {?s <urn:q> ?o} WHERE {?s <urn:p> ?o}"
 DATA = "<urn:a> <urn:p> <urn:b> ."
 
 
+@pytest.mark.parametrize("args", [["parse"], ["check", "--level", "syntax"]])
+def test_syntax_only_accepts_symmetric_data(args, capsys):
+    assert main([*args, "-R", "DATA { 1 <urn:p> 2 }"]) == 0
+    assert capsys.readouterr().out
+
+
 @pytest.mark.parametrize("rules_file", [False, True])
 @pytest.mark.parametrize("data_file", [False, True])
 def test_input_matrix(tmp_path, capsys, rules_file, data_file):
