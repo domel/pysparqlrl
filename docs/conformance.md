@@ -1,6 +1,6 @@
 # Conformance and implementation notes
 
-Target: [SPARQL 1.2 RL Working Draft, 2 September 2026](https://www.w3.org/TR/2026/WD-sparql12-rl-20260902/).
+Target: [SPARQL 1.2 RL Working Draft, 19 September 2026](https://www.w3.org/TR/2026/WD-sparql12-rl-20260919/).
 
 ## Pinned external tests
 
@@ -48,9 +48,9 @@ This is a tested reference implementation, not a certification of complete
 Working Draft conformance. The official SPARQL-RL suite exercises only part of
 the expression space. The following areas need further conformance expansion:
 
-- Complete XPath/XSD edge semantics for datatype casts and dates outside Python's
-  datetime range. Nonidentical values of temporal datatypes other than
-  `xsd:dateTime` do not yet have value equality support.
+- Temporal values use the XSD datatype implementation supplied by `elementpath`;
+  values outside the operators exercised by local and W3C suites still need
+  broader conformance coverage.
 - Broader XPath regular-expression conformance, including Unicode-version
   differences between the syntax translator and matching engine.
 - RDF 1.2 coverage for RDFLib-backed JSON-LD, RDF/XML, TriG, and N-Quads adapters;
@@ -70,7 +70,7 @@ least 34 significant digits. These operations do not inherit the application's
 global decimal context. DateTime comparisons normalize explicit offsets and
 retain fractional-second precision; UTC is the implicit timezone for values
 without an offset. Temporal constructors currently accept strings or values of
-the same datatype, within Python's supported calendar range.
+the same datatype.
 
 Floating-point values use IEEE binary32 for `xsd:float` and binary64 for
 `xsd:double`, with type promotion, signed zero, infinities, and NaN handling.

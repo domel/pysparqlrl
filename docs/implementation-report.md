@@ -1,6 +1,6 @@
 # Implementation checkpoint
 
-Target: SPARQL 1.2 RL, W3C Working Draft 2026-09-02.
+Target: SPARQL 1.2 RL, W3C Working Draft 2026-09-19.
 
 The library, installed CLI, module entry point, and executable Bash launcher are available. Remaining semantic coverage limits are recorded in [conformance notes](conformance.md).
 

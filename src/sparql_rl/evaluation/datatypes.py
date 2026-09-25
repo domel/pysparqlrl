@@ -15,6 +15,25 @@ from decimal import (
     localcontext,
 )
 
+from elementpath.datatypes import (
+    Date as XSDDate,
+)
+from elementpath.datatypes import (
+    DateTime as XSDDateTime,
+)
+from elementpath.datatypes import (
+    DayTimeDuration as XSDDayTimeDuration,
+)
+from elementpath.datatypes import (
+    Duration as XSDDuration,
+)
+from elementpath.datatypes import (
+    Time as XSDTime,
+)
+from elementpath.datatypes import (
+    YearMonthDuration as XSDYearMonthDuration,
+)
+
 from sparql_rl.errors import ExpressionError
 from sparql_rl.rdf.parser import IRI, XSD_NS, Literal, Node
 
@@ -220,15 +239,35 @@ def datetime_value(text: str) -> tuple[datetime, Decimal]:
     ), seconds
 
 
+def temporal_value(name: str, text: str):
+    """Parse XSD 1.1 temporal values without Python's year 1–9999 limit."""
+    # Keep arbitrary fractional-second precision for ordinary calendar years.
+    try:
+        if name == "dateTime":
+            return datetime_value(text)
+        if name == "date":
+            return datetime_value(text[:10] + "T00:00:00" + text[10:])
+        if name == "time":
+            return datetime_value("2000-01-01T" + text)
+    except ExpressionError:
+        pass
+    types = {
+        "dateTime": XSDDateTime,
+        "date": XSDDate,
+        "time": XSDTime,
+        "duration": XSDDuration,
+        "dayTimeDuration": XSDDayTimeDuration,
+        "yearMonthDuration": XSDYearMonthDuration,
+    }
+    try:
+        return types[name].fromstring(text)  # type: ignore[attr-defined]
+    except (KeyError, TypeError, ValueError, OverflowError) as error:
+        raise ExpressionError(f"invalid xsd:{name} lexical form") from error
+
+
 def validate_temporal(name: str, text: str) -> None:
-    if name == "dateTime":
-        datetime_value(text)
-    elif name == "date":
-        if not re.fullmatch(rf"{DATE}{ZONE}", text):
-            raise ExpressionError("invalid date lexical form")
-        datetime_value(text[:10] + "T00:00:00" + text[10:])
-    elif name == "time":
-        datetime_value("2000-01-01T" + text)
+    if name in {"dateTime", "date", "time", "duration", "dayTimeDuration", "yearMonthDuration"}:
+        temporal_value(name, text)
     else:
         date_part = (
             r"(?:[0-9]+D)?"

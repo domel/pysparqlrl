@@ -22,6 +22,18 @@ def value(text):
             "true",
         ),
         (
+            '"12000-01-01T00:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> = "12000-01-01T01:00:00+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>',
+            "true",
+        ),
+        (
+            '"2000-01-01Z"^^<http://www.w3.org/2001/XMLSchema#date> = "2000-01-01+00:00"^^<http://www.w3.org/2001/XMLSchema#date>',
+            "true",
+        ),
+        (
+            '"P1D"^^<http://www.w3.org/2001/XMLSchema#duration> = "PT24H"^^<http://www.w3.org/2001/XMLSchema#duration>',
+            "true",
+        ),
+        (
             "sameTerm(<<( <urn:s> <urn:p> 123 )>>, <<( <urn:s> <urn:p> 123.0 )>>)",
             "false",
         ),

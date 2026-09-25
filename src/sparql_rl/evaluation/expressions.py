@@ -34,11 +34,11 @@ from .datatypes import (
     boolean_value,
     cast_literal,
     datetime_parts,
-    datetime_value,
     floating_lexical,
     number,
     numeric_function,
     promoted,
+    temporal_value,
     unary_numeric,
 )
 from .strings import compatible_strings, require_string_literal, require_xsd_string
@@ -114,8 +114,12 @@ def equal(a: Node, b: Node) -> bool:
             return operator.eq(*promoted(a, b))
         if a.datatype == b.datatype == XSD_NS + "boolean":
             return ebv(a) == ebv(b)
-        if a.datatype == b.datatype == XSD_NS + "dateTime":
-            return datetime_value(a.value) == datetime_value(b.value)
+            temporal_types = {XSD_NS + name for name in (
+                "dateTime", "date", "time", "duration", "dayTimeDuration", "yearMonthDuration"
+            )}
+            if a.datatype == b.datatype and a.datatype in temporal_types:
+                name = a.datatype[len(XSD_NS):]
+                return temporal_value(name, a.value) == temporal_value(name, b.value)
     return same_value(a, b)
 
 
@@ -240,10 +244,12 @@ def _evaluate(
                 return literal(compare(*promoted(a, b)))
             if a.datatype == b.datatype == XSD_NS + "boolean":
                 return literal(compare(boolean_value(a), boolean_value(b)))
-            if a.datatype == b.datatype == XSD_NS + "dateTime":
-                return literal(
-                    compare(datetime_value(a.value), datetime_value(b.value))
-                )
+            temporal_types = {XSD_NS + name for name in (
+                "dateTime", "date", "time", "duration", "dayTimeDuration", "yearMonthDuration"
+            )}
+            if a.datatype == b.datatype and a.datatype in temporal_types:
+                name = a.datatype[len(XSD_NS):]
+                return literal(compare(temporal_value(name, a.value), temporal_value(name, b.value)))
         return literal(compare(require_xsd_string(a), require_xsd_string(b)))
     if op == "SAMETERM":
         return literal(a == values[1])

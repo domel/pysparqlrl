@@ -133,7 +133,7 @@ def test_module_and_executable():
         process = subprocess.run(
             [*command, "--version"], capture_output=True, text=True, check=True
         )
-        assert "2026-09-02" in process.stdout
+        assert "2026-09-19" in process.stdout
 
 
 def test_additional_formats_stats_and_aliases(capsys):

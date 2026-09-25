@@ -8,10 +8,9 @@ from sparql_rl.rdf.parser import IRI, XSD_NS, BNode, Literal, Node, TripleTerm
 from .datatypes import (
     NUMERIC,
     boolean_value,
-    datetime_value,
     number,
     promoted,
-    validate_temporal,
+    temporal_value,
 )
 
 
@@ -22,16 +21,14 @@ def literal_kind(node: Literal) -> str:
     if node.datatype == XSD_NS + "boolean":
         boolean_value(node)
         return "boolean"
-    if node.datatype == XSD_NS + "dateTime":
-        datetime_value(node.value)
-        return "dateTime"
+    for name in ("dateTime", "date", "time", "duration", "dayTimeDuration", "yearMonthDuration"):
+        if node.datatype == XSD_NS + name:
+            temporal_value(name, node.value)
+            return name
     if node.lang:
         return "language"
     if node.datatype in (None, XSD_NS + "string"):
         return "string"
-    for name in ("date", "time", "duration", "dayTimeDuration"):
-        if node.datatype == XSD_NS + name:
-            validate_temporal(name, node.value)
     return "unknown"
 
 
@@ -69,6 +66,6 @@ def same_value(a: Node, b: Node) -> bool:
         )
     if kind_a == "boolean":
         return boolean_value(a) == boolean_value(b)
-    if kind_a == "dateTime":
-        return datetime_value(a.value) == datetime_value(b.value)
+    if kind_a in {"dateTime", "date", "time", "duration", "dayTimeDuration", "yearMonthDuration"}:
+        return temporal_value(kind_a, a.value) == temporal_value(kind_b, b.value)
     return a == b

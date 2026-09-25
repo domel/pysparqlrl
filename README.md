@@ -1,7 +1,7 @@
 # pysparqlrl
 
 A standalone Python library and command-line processor targeting
-[SPARQL 1.2 RL, W3C Working Draft 2 September 2026](https://www.w3.org/TR/2026/WD-sparql12-rl-20260902/).
+[SPARQL 1.2 RL, W3C Working Draft 19 September 2026](https://www.w3.org/TR/2026/WD-sparql12-rl-20260919/).
 Requires Python 3.11 or later.
 
 ## Install
