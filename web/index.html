@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A browser playground for SPARQL 1.2 RL rules.">
+  <title>SPARQL 1.2 RL Playground</title>
+  <link rel="icon" href="./favicon.ico" sizes="any">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <h1>SPARQL 1.2 RL Playground</h1>
+      <p>Edit rules and run them locally in your browser.</p>
+    </div>
+    <div class="runtime-panel" aria-live="polite">
+      <span id="runtime-dot" class="status-dot" aria-hidden="true"></span>
+      <span id="runtime-status">Starting runtime…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="Examples">
+      <label for="example-select">Example</label>
+      <select id="example-select"></select>
+      <button id="load-example" type="button">Load example</button>
+      <span class="privacy-note">Rules and RDF data are processed locally in your browser.</span>
+    </section>
+
+    <section class="task-picker panel" aria-labelledby="task-title">
+      <div class="task-picker-copy">
+      <h2 id="task-title">What do you want to do?</h2>
+        <p id="operation-help">Apply rules to RDF data and see the inferred triples.</p>
+      </div>
+      <label for="operation-select">Operation</label>
+      <select id="operation-select">
+        <option value="infer">Infer</option>
+        <option value="query">Query results</option>
+        <option value="check">Check rules</option>
+        <option value="parse">Parse rules</option>
+        <option value="explain">Explain dependencies</option>
+      </select>
+    </section>
+
+    <section class="editor-grid">
+      <article class="panel">
+        <div class="panel-heading">
+          <label for="rules-editor">SPARQL-RL rules</label>
+          <label class="file-button">Load file<input id="rules-file" type="file" accept=".srl,.rq,.txt,text/plain"></label>
+        </div>
+        <p id="rules-file-name" class="file-status" aria-live="polite"></p>
+        <textarea id="rules-editor" spellcheck="false" autocomplete="off" aria-describedby="rules-help"></textarea>
+        <details class="editor-help" id="rules-help">
+          <summary>Rule syntax example</summary>
+          <code>PREFIX : &lt;https://example.org/&gt;<br>RULE { ?person :knows ?friend } WHERE { ?person :colleague ?friend }</code>
+        </details>
+      </article>
+
+      <article class="panel" id="data-panel">
+        <div class="panel-heading">
+          <label for="data-editor">RDF data</label>
+          <label class="file-button">Load file<input id="data-file" type="file" accept=".ttl,.nt,.rdf,.xml,.jsonld,.json,.trig,.nq,.txt"></label>
+        </div>
+        <p id="data-file-name" class="file-status" aria-live="polite"></p>
+        <textarea id="data-editor" spellcheck="false" autocomplete="off" aria-describedby="data-help"></textarea>
+        <details class="editor-help" id="data-help">
+          <summary>Turtle data example</summary>
+          <code>@prefix : &lt;https://example.org/&gt; .<br>:alice :knows :olivia .</code>
+        </details>
+      </article>
+    </section>
+
+    <section class="panel goal-panel" id="goal-panel">
+      <div class="panel-heading">
+          <label for="goal-editor">Query pattern</label>
+          <label class="file-button">Load file<input id="goal-file" type="file" accept=".rq,.txt,text/plain"></label>
+      </div>
+      <p id="goal-file-name" class="file-status" aria-live="polite"></p>
+      <textarea id="goal-editor" spellcheck="false" autocomplete="off" aria-describedby="goal-help"></textarea>
+      <details class="editor-help" id="goal-help">
+          <summary>Query pattern example</summary>
+        <code>{ ?person &lt;https://example.org/knows&gt; ?friend }</code>
+      </details>
+    </section>
+
+    <details class="advanced panel">
+      <summary>Advanced options</summary>
+      <div class="option-grid">
+        <label id="data-format-control">RDF data format
+          <select id="data-format">
+            <option value="turtle">Turtle</option>
+            <option value="nt">N-Triples</option>
+            <option value="rdfxml">RDF/XML</option>
+            <option value="jsonld">JSON-LD</option>
+            <option value="trig">TriG</option>
+            <option value="nquads">N-Quads</option>
+          </select>
+          <span class="field-help">This selects how the text in the RDF data editor is parsed. It does not convert the existing text. Loading a file selects a format from its extension.</span>
+        </label>
+        <label id="dataset-policy-control">Named graphs in TriG / N-Quads
+          <select id="dataset-policy">
+            <option value="error">Reject named graphs</option>
+            <option value="union">Combine graphs into one</option>
+          </select>
+        </label>
+        <label id="output-format-control">Inference output format
+          <select id="output-format">
+            <option value="turtle">Turtle</option>
+            <option value="nt">N-Triples</option>
+            <option value="rdfxml">RDF/XML</option>
+            <option value="jsonld">JSON-LD</option>
+          </select>
+        </label>
+        <label id="check-level-control">Check level
+          <select id="check-level">
+            <option value="all">All checks</option>
+            <option value="syntax">Syntax only</option>
+            <option value="wellformed">Well-formedness</option>
+            <option value="stratification">Stratification</option>
+          </select>
+        </label>
+        <label id="include-base-control" class="checkbox-label"><input id="include-base" type="checkbox"> Include input data in inference output</label>
+        <label id="rules-base-control">Rules base IRI<input id="rules-base" type="url" placeholder="https://example.org/rules/"></label>
+        <label id="data-base-control">Data base IRI<input id="data-base" type="url" placeholder="https://example.org/data/"></label>
+        <label id="goal-base-control">Query base IRI<input id="goal-base" type="url" placeholder="https://example.org/query/"></label>
+      </div>
+      <div id="imports-control" class="imports-control">
+        <label for="imports-editor">In-memory rule imports (JSON object: IRI → rule text)</label>
+        <textarea id="imports-editor" class="imports-editor" spellcheck="false">{}</textarea>
+      </div>
+    </details>
+
+    <section class="actions" aria-label="Run operation">
+      <button id="run-operation" type="button" disabled>Run inference</button>
+      <button id="cancel-operation" type="button" hidden>Cancel</button>
+      <span id="operation-status" role="status" aria-live="polite"></span>
+    </section>
+
+    <section class="panel results-panel" aria-labelledby="results-title">
+      <div class="panel-heading result-heading">
+        <div>
+          <h2 id="results-title">Results</h2>
+          <span id="execution-time" class="execution-time"></span>
+        </div>
+        <div class="result-actions">
+          <button id="copy-result" type="button" disabled>Copy</button>
+          <button id="download-result" type="button" disabled>Download</button>
+        </div>
+      </div>
+      <div id="error-output" class="error-output" role="alert" hidden></div>
+      <button id="error-jump" class="error-jump" type="button" hidden>Go to error location</button>
+      <div id="structured-output"></div>
+      <details id="raw-details" class="raw-details">
+        <summary>Show raw data</summary>
+        <pre id="raw-output" tabindex="0">Runtime is initializing…</pre>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>No Python server is needed. Browser memory limits apply.</p>
+  </footer>
+
+  <script src="./examples.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -162,10 +162,14 @@ def _parse_data(
             raise ValueError("dataset policy must be error or union")
         dataset = parse_rdflib(text, formats[format], base_iri)
         assert isinstance(dataset, rdflib.Dataset)
+        default_graph = getattr(dataset, "default_graph", None)
+        if default_graph is None:
+            # RDFLib 7.1.x calls this graph ``default_context``.
+            default_graph = dataset.default_context
         named = [
             g
             for g in dataset.graphs()
-            if g.identifier != dataset.default_graph.identifier and len(g)
+            if g.identifier != default_graph.identifier and len(g)
         ]
         if named and dataset_policy == "error":
             raise ValueError("named graphs require dataset_policy=union")

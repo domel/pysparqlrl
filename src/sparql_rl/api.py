@@ -8,7 +8,7 @@ from sparql_rl.analysis import PreparedRuleSet, build_dependency_graph, stratify
 from sparql_rl.evaluation.engine import evaluate_body, evaluate_rules
 from sparql_rl.evaluation.expressions import Context, FunctionRegistry
 from sparql_rl.evaluation.matcher import SolutionMapping
-from sparql_rl.imports import ImportResolver
+from sparql_rl.imports import ImportResolver, ImportResolverProtocol
 from sparql_rl.model import RuleElement, RuleSet, Variable
 from sparql_rl.rdf.io import Graph, as_graph
 from sparql_rl.syntax.parser import RuleParser, parse_rules
@@ -16,7 +16,7 @@ from sparql_rl.validation import validate_body, validate_rules
 
 
 def prepare_rules(
-    rule_set: RuleSet, *, import_resolver: ImportResolver | None = None
+    rule_set: RuleSet, *, import_resolver: ImportResolverProtocol | None = None
 ) -> PreparedRuleSet:
     if rule_set.imports:
         rule_set = (import_resolver or ImportResolver()).resolve(rule_set)
@@ -34,7 +34,7 @@ def infer(
     data_base_iri: str | None = None,
     include_base: bool = False,
     function_registry: FunctionRegistry | None = None,
-    import_resolver: ImportResolver | None = None,
+    import_resolver: ImportResolverProtocol | None = None,
 ) -> Graph:
     base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
     result = _evaluate_input(
@@ -54,7 +54,7 @@ def _evaluate_input(
     base: Graph,
     context: Context,
     rule_base_iri: str | None,
-    import_resolver: ImportResolver | None,
+    import_resolver: ImportResolverProtocol | None,
 ) -> Graph:
     if isinstance(rule_set, str):
         rule_set = parse_rules(rule_set, base_iri=rule_base_iri)
@@ -89,7 +89,7 @@ def query(
     data_format: str | None = None,
     data_base_iri: str | None = None,
     function_registry: FunctionRegistry | None = None,
-    import_resolver: ImportResolver | None = None,
+    import_resolver: ImportResolverProtocol | None = None,
 ) -> QueryResult:
     base = as_graph(data, format=data_format or "turtle", base_iri=data_base_iri)
     context = Context(functions=function_registry or FunctionRegistry())

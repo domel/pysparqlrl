@@ -17,7 +17,7 @@ from sparql_rl.errors import (
 from sparql_rl.imports import ImportResolver
 from sparql_rl.model import RuleSet, is_run_once
 from sparql_rl.rdf.io import Graph, merge_graphs, merge_triples, parse_data
-from sparql_rl.rdf.parser import IRI, BNode, Node, TripleTerm, format_node_nt
+from sparql_rl.serialization import query_result_json, query_result_tsv
 from sparql_rl.spec_version import SPEC_DATE, __version__
 
 
@@ -155,29 +155,6 @@ def read_data(args: argparse.Namespace) -> Graph:
     return merge_graphs(graphs)
 
 
-def binding_json(node: Node) -> dict:
-    if isinstance(node, IRI):
-        return {"type": "uri", "value": node.value}
-    if isinstance(node, BNode):
-        return {"type": "bnode", "value": node.label}
-    if isinstance(node, TripleTerm):
-        return {
-            "type": "triple",
-            "value": {
-                "subject": binding_json(node.subject),
-                "predicate": binding_json(node.predicate),
-                "object": binding_json(node.object),
-            },
-        }
-    result = {"type": "literal", "value": node.value}
-    if node.lang:
-        result["xml:lang"] = node.lang
-    if node.direction:
-        result["its:dir"] = node.direction
-    if node.datatype:
-        result["datatype"] = node.datatype
-    return result
-
 
 def execute(args: argparse.Namespace) -> tuple[str, int]:
     rules = read_rules(args)
@@ -263,28 +240,12 @@ def execute(args: argparse.Namespace) -> tuple[str, int]:
         output = "true" if result.boolean else "false"
     elif args.format == "json":
         output = json.dumps(
-            {
-                "head": {"vars": [v.value for v in result.variables]},
-                "results": {
-                    "bindings": [
-                        {v.value: binding_json(n) for v, n in s.items()}
-                        for s in result.bindings
-                    ]
-                },
-            },
+            {key: value for key, value in query_result_json(result).items() if key != "boolean"},
             ensure_ascii=False,
             indent=2,
         )
     else:
-        output = "\n".join(
-            [
-                "\t".join("?" + v.value for v in result.variables),
-                *(
-                    "\t".join(format_node_nt(s[v]) for v in result.variables)
-                    for s in result.bindings
-                ),
-            ]
-        )
+        output = query_result_tsv(result)
     return output, 0 if result.boolean else 1
 
 

@@ -1,5 +1,7 @@
-"""Bounded, opt-in import resolution."""
+"""Bounded import resolution for filesystem/network and in-memory documents."""
 
+from collections.abc import Callable, Mapping
+from typing import Protocol
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import URLError
@@ -15,6 +17,50 @@ from sparql_rl.syntax.parser import parse_rules
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise ImportResolutionError("HTTP redirects are disabled for imports")
+
+
+def _normalized_import_uri(uri: str) -> str:
+    return urldefrag(uri)[0]
+
+
+def _resolve(
+    root: RuleSet,
+    *,
+    read: Callable[[str], str],
+    max_documents: int,
+) -> RuleSet:
+    """Resolve imports breadth-first while preserving import-once/cycle semantics."""
+    visited = {_normalized_import_uri(uri) for uri in root.source_iris}
+    if root.source:
+        visited.add(_normalized_import_uri(root.source))
+    queue = [root]
+    rules: list[Rule] = []
+    graphs = []
+    while queue:
+        current = queue.pop(0)
+        rules.extend(current.rules)
+        graphs.append(Graph(current.data))
+        for uri in current.imports:
+            uri = _normalized_import_uri(uri)
+            if uri in visited:
+                continue
+            if len(visited) >= max_documents:
+                raise ImportResolutionError("import document limit exceeded")
+            visited.add(uri)
+            try:
+                queue.append(parse_rules(read(uri), base_iri=uri, source_name=uri))
+            except ParseError as error:
+                raise ImportResolutionError(
+                    f"import has invalid syntax: {error}"
+                ) from error
+    return RuleSet(tuple(rules), tuple(merge_graphs(graphs)), source=root.source)
+
+
+class ImportResolverProtocol(Protocol):
+    """Minimal resolver interface accepted by the shared public API."""
+
+    def resolve(self, root: RuleSet) -> RuleSet:
+        ...
 
 
 @dataclass(frozen=True)
@@ -58,29 +104,41 @@ class ImportResolver:
             ) from error
 
     def resolve(self, root: RuleSet) -> RuleSet:
-        visited = {urldefrag(uri)[0] for uri in root.source_iris}
-        if root.source:
-            visited.add(urldefrag(root.source)[0])
-        queue = [root]
-        rules: list[Rule] = []
-        graphs = []
-        while queue:
-            current = queue.pop(0)
-            rules.extend(current.rules)
-            graphs.append(Graph(current.data))
-            for uri in current.imports:
-                uri = urldefrag(uri)[0]
-                if uri in visited:
-                    continue
-                if len(visited) >= self.max_documents:
-                    raise ImportResolutionError("import document limit exceeded")
-                visited.add(uri)
-                try:
-                    queue.append(
-                        parse_rules(self.read(uri), base_iri=uri, source_name=uri)
-                    )
-                except ParseError as error:
-                    raise ImportResolutionError(
-                        f"import has invalid syntax: {error}"
-                    ) from error
-        return RuleSet(tuple(rules), tuple(merge_graphs(graphs)), source=root.source)
+        return _resolve(root, read=self.read, max_documents=self.max_documents)
+
+
+class MappingImportResolver:
+    """Resolve rule imports from a bounded in-memory IRI-to-text mapping."""
+
+    def __init__(
+        self,
+        documents: Mapping[str, str],
+        *,
+        max_documents: int = 128,
+        max_bytes: int = 2_000_000,
+    ) -> None:
+        self.max_documents = max_documents
+        self.max_bytes = max_bytes
+        self._documents = {
+            _normalized_import_uri(str(uri)): text for uri, text in documents.items()
+        }
+
+    def read(self, uri: str) -> str:
+        normalized = _normalized_import_uri(uri)
+        try:
+            text = self._documents[normalized]
+        except KeyError as error:
+            raise ImportResolutionError(
+                f"import is not available in browser mapping: {normalized}"
+            ) from error
+        if not isinstance(text, str):
+            raise ImportResolutionError("mapped import document must be text")
+        if len(text.encode("utf-8")) > self.max_bytes:
+            raise ImportResolutionError("import exceeds response size limit")
+        return text
+
+    def resolve(self, root: RuleSet) -> RuleSet:
+        return _resolve(root, read=self.read, max_documents=self.max_documents)
+
+
+__all__ = ["ImportResolver", "ImportResolverProtocol", "MappingImportResolver"]

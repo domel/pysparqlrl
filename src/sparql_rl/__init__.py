@@ -3,7 +3,7 @@
 from .analysis import PreparedRuleSet
 from .api import QueryResult, infer, prepare_rules, query
 from .evaluation.expressions import FunctionRegistry
-from .imports import ImportResolver
+from .imports import ImportResolver, MappingImportResolver
 from .model import Rule, RuleSet, Variable
 from .rdf.io import Graph
 from .rdf.parser import IRI, BNode, Literal, TripleTerm
@@ -16,6 +16,7 @@ __all__ = [
     "FunctionRegistry",
     "Graph",
     "ImportResolver",
+    "MappingImportResolver",
     "Literal",
     "PreparedRuleSet",
     "QueryResult",

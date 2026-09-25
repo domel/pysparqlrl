@@ -34,6 +34,35 @@ The launcher uses `.venv/bin/python` when available, otherwise Python >= 3.11
 from PATH. `PYSPARQLRL_PYTHON` can select another interpreter. Install dependencies
 first as above. It preserves the caller's working directory and CLI exit codes.
 
+## Run in the browser
+
+A static Pyodide playground is available at
+[https://domel.github.io/pysparqlrl/](https://domel.github.io/pysparqlrl/). It runs
+the same `sparql_rl` Python implementation as the library and CLI inside a Web
+Worker, so parsing, validation, stratification, inference, and queries do not run
+on the UI thread. Normal rules, RDF data, and goals are processed locally in the
+browser; no Python installation or application backend is required.
+
+The playground exposes **Parse**, **Check**, **Explain**, **Infer**, and **Query**,
+supports local rule/RDF/goal files, base IRIs, RDF input/output format selection,
+query result tables, copying/downloading results, and bounded in-memory rule
+imports. Browser mode does not read arbitrary filesystem paths and the MVP does
+not fetch rule imports from the network. Browser memory limits apply.
+
+For local development, first stage the wheel and then serve the static directory:
+
+```bash
+python -m pip install build
+python -m build --wheel
+mkdir -p web/dist
+cp dist/sparql_rl-0.1.0-py3-none-any.whl web/dist/
+python -m http.server -d web 8000
+```
+
+Open `http://localhost:8000/`. Do not open `web/index.html` through `file://`,
+because browsers restrict Web Workers and package loading in that mode. See
+[`docs/browser.md`](docs/browser.md) for architecture and deployment details.
+
 ## Python library
 
 ```python
