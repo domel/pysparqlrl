@@ -7,8 +7,9 @@ Python API to JSON-compatible values suitable for a Pyodide Web Worker.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
-from typing import Any, Mapping
+from typing import Any
 
 from sparql_rl import infer, parse_rules, prepare_rules, query, validate_rules
 from sparql_rl.errors import (
@@ -42,7 +43,9 @@ def check_text(
 ) -> dict[str, Any]:
     """Run the requested validation stage and return explicit check status."""
     if level not in {"syntax", "wellformed", "stratification", "all"}:
-        raise ValueError("check level must be syntax, wellformed, stratification or all")
+        raise ValueError(
+            "check level must be syntax, wellformed, stratification or all"
+        )
     rule_set = parse_rules(rules, base_iri=rules_base)
     checks = {
         "syntax": True,
@@ -268,7 +271,7 @@ def dispatch(request: Mapping[str, Any]) -> dict[str, Any]:
         else:
             raise ValueError(f"unsupported browser action: {action or '<empty>'}")
         return {"id": request_id, "ok": True, "result": result}
-    except Exception as error:  # worker boundary: never leak normal tracebacks
+    except Exception as error:  # noqa: BLE001 - worker boundary returns errors as JSON
         return {"id": request_id, "ok": False, "error": error_to_dict(error)}
 
 
@@ -277,9 +280,9 @@ def handle_request_json(request_json: str) -> str:
     try:
         request = json.loads(request_json)
         if not isinstance(request, dict):
-            raise ValueError("request must be a JSON object")
+            raise TypeError("request must be a JSON object")
         response = dispatch(request)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - keep malformed requests inside protocol
         response = {"id": None, "ok": False, "error": error_to_dict(error)}
     return json.dumps(response, ensure_ascii=False)
 

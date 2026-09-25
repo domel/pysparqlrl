@@ -52,7 +52,9 @@ def query_result_tsv(result: QueryResult) -> str:
         [
             "\t".join("?" + variable.value for variable in result.variables),
             *(
-                "\t".join(format_node_nt(solution[variable]) for variable in result.variables)
+                "\t".join(
+                    format_node_nt(solution[variable]) for variable in result.variables
+                )
                 for solution in result.bindings
             ),
         ]

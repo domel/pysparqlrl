@@ -5,7 +5,9 @@ from sparql_rl.serialization import binding_json, query_result_json
 
 
 def test_triple_term_and_directional_literal_serialization():
-    triple = TripleTerm(IRI("urn:s"), IRI("urn:p"), Literal("hello", lang="en", direction="ltr"))
+    triple = TripleTerm(
+        IRI("urn:s"), IRI("urn:p"), Literal("hello", lang="en", direction="ltr")
+    )
     value = binding_json(triple)
     assert value["type"] == "triple"
     assert value["value"]["object"]["its:dir"] == "ltr"

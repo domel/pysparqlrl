@@ -155,7 +155,6 @@ def read_data(args: argparse.Namespace) -> Graph:
     return merge_graphs(graphs)
 
 
-
 def execute(args: argparse.Namespace) -> tuple[str, int]:
     rules = read_rules(args)
     if args.command == "parse":
@@ -240,7 +239,11 @@ def execute(args: argparse.Namespace) -> tuple[str, int]:
         output = "true" if result.boolean else "false"
     elif args.format == "json":
         output = json.dumps(
-            {key: value for key, value in query_result_json(result).items() if key != "boolean"},
+            {
+                key: value
+                for key, value in query_result_json(result).items()
+                if key != "boolean"
+            },
             ensure_ascii=False,
             indent=2,
         )

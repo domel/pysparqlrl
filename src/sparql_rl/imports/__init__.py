@@ -1,9 +1,9 @@
 """Bounded import resolution for filesystem/network and in-memory documents."""
 
 from collections.abc import Callable, Mapping
-from typing import Protocol
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 from urllib.error import URLError
 from urllib.parse import unquote, urldefrag, urlsplit
 from urllib.request import HTTPRedirectHandler, build_opener
@@ -59,8 +59,7 @@ def _resolve(
 class ImportResolverProtocol(Protocol):
     """Minimal resolver interface accepted by the shared public API."""
 
-    def resolve(self, root: RuleSet) -> RuleSet:
-        ...
+    def resolve(self, root: RuleSet) -> RuleSet: ...
 
 
 @dataclass(frozen=True)
